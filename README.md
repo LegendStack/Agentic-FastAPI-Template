@@ -260,19 +260,16 @@ Read [contributing](CONTRIBUTING.md).
 ## Inspiration
 
 This project was built from the ground up as an Enterprise AI foundation, drawing inspiration from best practices in several open-source projects:
-
-- [`LegendStack/Agentic-FastAPI-Template`](https://github.com/LegendStack/Agentic-FastAPI-Template) - Core API structure
-- [`Full Stack FastAPI and PostgreSQL`](https://github.com/tiangolo/full-stack-fastapi-postgresql) - Project layout
+- [`tiangolo/full-stack-fastapi-postgresql`](https://github.com/tiangolo/full-stack-fastapi-postgresql) - Initial project layout inspiration
 - [`FastAPI Microservices`](https://github.com/Kludex/fastapi-microservices) - Resilience patterns
 - [`Async Web API with FastAPI + SQLAlchemy 2.0`](https://github.com/rhoboro/async-fastapi-sqlalchemy)
 - [`FastAPI Rocket Boilerplate`](https://github.com/asacristani/fastapi-rocket-boilerplate/tree/main)
 
 ## License
 
-[`MIT`](LICENSE.md)
+[`MIT`](LICENSE)
 
 <hr>
 <a href="https://legendstack.it">
   <img src="https://github.com/LegendStack/agentic-fastapi-template/raw/main/docs/assets/banner.png" alt="Powered by LegendStack - legendstack.it"/>
 </a>
-# Agentic-FastAPI-Template
