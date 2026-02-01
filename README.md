@@ -22,6 +22,9 @@
   <a href="https://LegendStack.github.io/agentic-fastapi-template/">
     <img src="https://img.shields.io/badge/docs-online-blue?style=flat-square" alt="Docs">
   </a>
+  <a href="https://deepwiki.com/LegendStack/Agentic-FastAPI-Template">
+    <img src="https://img.shields.io/badge/DeepWiki-1F2937?style=flat-square&logoColor=white" alt="DeepWiki">
+  </a>
   <a href="https://discord.gg/legendstack">
     <img src="https://img.shields.io/badge/discord-join-7289da?style=flat-square&logo=discord&logoColor=white" alt="Discord">
   </a>
