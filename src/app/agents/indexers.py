@@ -5,7 +5,8 @@ from typing import Any
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from ..core.config import settings
+from src.app.core.config import settings
+from src.app.core.security_utils import TenantEncryption
 from .azure_openai import LLMService
 from .base import BaseIndexer, BaseVectorStore
 
@@ -47,10 +48,17 @@ class DocumentIndexer(BaseIndexer):
         documents_to_index = []
 
         for chunk in chunks:
-            embedding = await self.llm_service.get_embeddings(chunk.page_content)
+            raw_content = chunk.page_content
+            # Encrypt content at rest for Zero-Trust
+            indexed_content = raw_content
+            if tenant_id:
+                indexed_content = TenantEncryption.encrypt(raw_content, tenant_id)
+                chunk.metadata["encrypted"] = True
+
+            embedding = await self.llm_service.get_embeddings(raw_content)  # Embed raw text
             documents_to_index.append(
                 {
-                    "content": chunk.page_content,
+                    "content": indexed_content,
                     "embedding": embedding,
                     "metadata": chunk.metadata,
                     "source_id": source_id,

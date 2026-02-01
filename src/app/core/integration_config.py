@@ -277,16 +277,17 @@ def configure_integrations(factory: IntegrationClientFactory | None = None) -> N
         if set_llm_cache and RedisSemanticCache:
             try:
                 from ..agents.azure_openai import get_azure_openai_embeddings
+                from .encrypted_cache import EncryptedRedisSemanticCache
 
                 set_llm_cache(
-                    RedisSemanticCache(
+                    EncryptedRedisSemanticCache(
                         redis_url=settings.REDIS_URL,
                         embedding=get_azure_openai_embeddings(),
                         distance_threshold=settings.SEMANTIC_CACHE_THRESHOLD,
                         ttl=settings.SEMANTIC_CACHE_TTL,
                     )
                 )
-                logger.info("Semantic caching enabled via Redis")
+                logger.info("Semantic caching enabled via Redis (Encrypted)")
             except Exception as e:
                 logger.error(f"Failed to initialize semantic cache: {e}")
         else:

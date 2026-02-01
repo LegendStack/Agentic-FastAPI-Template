@@ -62,6 +62,8 @@ Built on top of the original foundation, we've added a professional agentic laye
 *   **Semantic Caching (V4.0)**: Frame-work wide Redis-backed caching using similarity distance for reduced latency and LLM costs.
 *   **Self-Correction (V4.0)**: Autonomous agent improvement using the **Reflector Pattern** and internal evaluation loops.
 *   **High-Fidelity Parsing (V4.0)**: Enterprise-grade document ingestion for complex layouts and tables via **Unstructured.io**.
+*   **Entity-Aware Memory (V4.1)**: Cross-thread relationship tracking and recall using **Neo4j** knowledge graphs.
+*   **Zero-Trust Security (V4.1)**: Multi-tenant **BYOK** (Bring Your Own Key) encryption-at-rest for RAG document segments.
 
 <details>
 <summary><b>🚀 Quick Start: Use Azure OpenAI in 3 lines</b></summary>

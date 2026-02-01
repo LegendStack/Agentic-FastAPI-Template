@@ -55,7 +55,7 @@ async def test_semantic_cache_initialization():
     # We patch the module-level set_llm_cache and RedisSemanticCache
     # which are now always present (possibly as None)
     with patch("src.app.core.integration_config.set_llm_cache") as mock_set_cache:
-        with patch("src.app.core.integration_config.RedisSemanticCache") as mock_redis_cache:
+        with patch("src.app.core.encrypted_cache.EncryptedRedisSemanticCache") as mock_redis_cache:
             with patch("src.app.core.integration_config.settings") as mock_settings:
                 mock_settings.ENABLE_SEMANTIC_CACHE = True
                 mock_settings.REDIS_URL = "redis://localhost:6379"

@@ -3,6 +3,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.security_utils import TenantEncryption
 from ..models.agentic import DocumentSection
 from .base import BaseVectorStore
 
@@ -52,7 +53,16 @@ class PgVectorStore(BaseVectorStore):
         sections = result.scalars().all()
 
         return [
-            {"id": s.id, "content": s.content, "metadata": s.metadata_json, "source_id": s.source_id} for s in sections
+            {
+                "id": s.id,
+                "content": TenantEncryption.decrypt(s.content, s.tenant_id)
+                if s.metadata_json.get("encrypted")
+                else s.content,
+                "metadata": s.metadata_json,
+                "source_id": s.source_id,
+                "tenant_id": s.tenant_id,
+            }
+            for s in sections
         ]
 
     async def delete_documents(self, ids: list[str]) -> None:

@@ -328,6 +328,11 @@ class Settings(
 
     PREFER_UNSTRUCTURED: bool = True
 
+    # --- Intelligence & Memory (V4.1) ---
+    ENABLE_ENTITY_MEMORY: bool = False  # Track entities across threads
+    ENTITY_EXTRACTION_MODEL: str = "gpt-4o"
+    ENTITY_SIMILARITY_THRESHOLD: float = 0.85
+
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".env"),
         env_file_encoding="utf-8",
