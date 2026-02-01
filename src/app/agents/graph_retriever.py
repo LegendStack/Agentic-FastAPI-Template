@@ -7,9 +7,9 @@ Combines vector-based retrieval with graph-based relationship traversal.
 import logging
 from typing import Any, Dict, List
 
-from src.app.core.graph_db import GraphDBClient
-from src.app.core import config
 from src.app.agents.vector_stores import BaseVectorStore
+from src.app.core import config
+from src.app.core.graph_db import GraphDBClient
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class GraphRetriever:
         LIMIT 15
         """
         query_words = [w.strip(",.?!").lower() for w in query_text.split() if len(w) > 3]
-        
+
         try:
             results = await self.graph_client.execute_query(
                 cypher, {"query_words": query_words, "source_ids": vector_source_ids}

@@ -7,24 +7,28 @@ Extracts key entities (People, Projects, Systems) from messages and persists the
 import logging
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field
-from langchain_core.messages import BaseMessage
 from langchain_openai import AzureChatOpenAI
+from pydantic import BaseModel, Field
 
 from src.app.core import config
 from src.app.core.graph_db import GraphDBClient
 
 logger = logging.getLogger(__name__)
 
+
 class ExtractedEntity(BaseModel):
     """Schema for a single extracted entity."""
+
     name: str = Field(description="The canonical name of the entity")
     label: str = Field(description="The type of entity (Person, Project, System, Org)")
     properties: Dict[str, Any] = Field(default_factory=dict, description="Additional context or attributes")
 
+
 class EntityExtractionSchema(BaseModel):
     """Schema for LLM output."""
+
     entities: List[ExtractedEntity]
+
 
 class EntityNode:
     """
@@ -53,7 +57,7 @@ class EntityNode:
         last_msg = messages[-1]
         if hasattr(last_msg, "role") and last_msg.role != "user":
             return state
-        
+
         content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
         try:
@@ -82,8 +86,8 @@ class EntityNode:
             SET e += $properties, e.last_seen = timestamp()
             """
             params = {
-                "name": entity.name.lower(), # Normalize
+                "name": entity.name.lower(),  # Normalize
                 "properties": entity.properties,
-                "tenant_id": tenant_id
+                "tenant_id": tenant_id,
             }
             await self.graph_client.execute_query(cypher, params)

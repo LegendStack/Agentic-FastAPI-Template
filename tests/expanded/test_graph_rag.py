@@ -39,6 +39,7 @@ async def test_graph_retriever_retrieve(graph_retriever, mock_vector_store, mock
 
     query_vector = [0.1] * 1536
     from src.app.core import config
+
     with patch.object(config.settings, "ENABLE_ENTITY_MEMORY", True):
         results = await graph_retriever.retrieve(query_text="test query", query_vector=query_vector, k=2)
 

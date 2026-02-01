@@ -7,10 +7,13 @@ Provides tenant-aware symmetric encryption for sensitive RAG data.
 import base64
 import hashlib
 import logging
+
 from cryptography.fernet import Fernet
+
 from src.app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
 
 class TenantEncryption:
     """
@@ -33,7 +36,7 @@ class TenantEncryption:
         """Encrypts data for a specific tenant."""
         if not data or not tenant_id:
             return data
-        
+
         try:
             key = cls._get_tenant_key(tenant_id)
             f = Fernet(key)
@@ -47,7 +50,7 @@ class TenantEncryption:
         """Decrypts data for a specific tenant."""
         if not encrypted_data or not tenant_id:
             return encrypted_data
-            
+
         try:
             key = cls._get_tenant_key(tenant_id)
             f = Fernet(key)
