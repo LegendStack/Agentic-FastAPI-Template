@@ -26,7 +26,7 @@
   <a href="https://redis.io">
       <img src="https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=fff&style=for-the-badge" alt="Redis">
   </a>
-  <a href="https://deepwiki.com/benavlabs/FastAPI-boilerplate">
+  <a href="https://deepwiki.com/LegendStack/Agentic-FastAPI-Template">
       <img src="https://img.shields.io/badge/DeepWiki-1F2937?style=for-the-badge&logoColor=white" alt="DeepWiki">
   </a>
 </p>
@@ -123,7 +123,7 @@ await rate_limiter.record_usage("tenant-123", tokens_used=500)
 * **Sensible defaults** with the freedom to opt-out of modules
 * **Docs over boilerplate** in README - depth lives in the site
 
-> **Not a fit** if you need a monorepo microservices scaffold - [see the docs](https://benavlabs.github.io/FastAPI-boilerplate/user-guide/project-structure/) for pointers.
+> **Not a fit** if you need a monorepo microservices scaffold - [see the docs](https://benavlabs.github.io/Agentic-FastAPI-Template/user-guide/project-structure/) for pointers.
 
 ## TL;DR - Quickstart
 
@@ -261,7 +261,7 @@ Read [contributing](CONTRIBUTING.md).
 
 This project was built from the ground up as an Enterprise AI foundation, drawing inspiration from best practices in several open-source projects:
 
-- [`benavlabs/FastAPI-boilerplate`](https://github.com/benavlabs/FastAPI-boilerplate) - Core API structure
+- [`LegendStack/Agentic-FastAPI-Template`](https://github.com/LegendStack/Agentic-FastAPI-Template) - Core API structure
 - [`Full Stack FastAPI and PostgreSQL`](https://github.com/tiangolo/full-stack-fastapi-postgresql) - Project layout
 - [`FastAPI Microservices`](https://github.com/Kludex/fastapi-microservices) - Resilience patterns
 - [`Async Web API with FastAPI + SQLAlchemy 2.0`](https://github.com/rhoboro/async-fastapi-sqlalchemy)

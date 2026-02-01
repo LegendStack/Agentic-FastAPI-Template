@@ -7,7 +7,7 @@ Contributions are appreciated, even if just reporting bugs, documenting stuff or
 
 ### Cloning the Repository
 
-Start by forking and cloning the FastAPI-boilerplate repository:
+Start by forking and cloning the Agentic-FastAPI-Template repository:
 
 1. **Fork the Repository**: Begin by forking the project repository. You can do this by visiting https://github.com/LegendStack/agentic-fastapi-template and clicking the "Fork" button.
 1. **Create a Feature Branch**: Once you've forked the repo, create a branch for your feature by running `git checkout -b feature/fooBar`.

@@ -597,9 +597,9 @@ If you encounter any issues:
 
 1. **Check the logs** for error messages
 2. **Verify your configuration** in the `.env` file
-3. **Review the [GitHub Issues](https://github.com/benavlabs/fastapi-boilerplate/issues)** for common solutions
-4. **Search [existing issues](https://github.com/benavlabs/fastapi-boilerplate/issues)** on GitHub
-5. **Create a [new issue](https://github.com/benavlabs/fastapi-boilerplate/issues/new)** with detailed information
+3. **Review the [GitHub Issues](https://github.comLegendStack/Agentic-FastAPI-Template/issues)** for common solutions
+4. **Search [existing issues](https://github.comLegendStack/Agentic-FastAPI-Template/issues)** on GitHub
+5. **Create a [new issue](https://github.comLegendStack/Agentic-FastAPI-Template/issues/new)** with detailed information
 
 ## Congratulations!
 

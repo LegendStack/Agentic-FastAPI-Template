@@ -9,7 +9,7 @@ The FastAPI Boilerplate follows a clean, modular architecture that separates con
 ## Root Directory Structure
 
 ```text
-FastAPI-boilerplate/
+Agentic-FastAPI-Template/
 ├── Dockerfile                 # Container configuration
 ├── docker-compose.yml         # Multi-service orchestration
 ├── pyproject.toml            # Project configuration and dependencies
