@@ -271,10 +271,6 @@ This project was built from the ground up as an Enterprise AI foundation, drawin
 
 [`MIT`](LICENSE.md)
 
-## Contact
-
-LegendStack – [legendstack.it](https://legendstack.it), [Discord](https://discord.gg/legendstack)
-
 <hr>
 <a href="https://legendstack.it">
   <img src="https://github.com/LegendStack/agentic-fastapi-template/raw/main/docs/assets/banner.png" alt="Powered by LegendStack - legendstack.it"/>
