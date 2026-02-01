@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2023 Igor Magalhães
+Copyright (c) 2023 Igor Magalhães (original FastAPI boilerplate)
 Copyright (c) 2026 Manohar Tallapaneni
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
