@@ -1,3 +1,5 @@
+from typing import Any
+
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 
 from ..core.config import settings
@@ -46,3 +48,7 @@ class LLMService:
         """Generate embeddings for a list of texts."""
         embeddings = await self.embeddings_model.aembed_documents(texts)
         return embeddings
+
+    async def chat(self, messages: list[dict[str, str]]) -> Any:
+        """Send a message list to the chat model."""
+        return await self.chat_model.ainvoke(messages)

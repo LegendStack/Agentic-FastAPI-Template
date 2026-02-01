@@ -5,6 +5,7 @@ from typing import Any
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from ..core.config import settings
 from .azure_openai import LLMService
 from .base import BaseIndexer, BaseVectorStore
 
@@ -26,7 +27,9 @@ class DocumentIndexer(BaseIndexer):
         logger.info(f"Indexing file: {file_path}")
 
         # 1. Load document
-        if file_path.endswith(".pdf"):
+        if getattr(settings, "PREFER_UNSTRUCTURED", True):
+            loader = UnstructuredFileLoader(file_path)
+        elif file_path.endswith(".pdf"):
             loader = PyPDFLoader(file_path)
         elif file_path.endswith(".txt") or file_path.endswith(".md"):
             loader = TextLoader(file_path)

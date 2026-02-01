@@ -59,9 +59,10 @@ class BaseIndexer(ABC):
 class BaseAgent(ABC):
     """Abstract base class for all Agentic solutions."""
 
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str, reflector: Any | None = None):
         self.name = name
         self.description = description
+        self.reflector = reflector
 
     @abstractmethod
     async def invoke(self, input_text: str, config: dict[str, Any]) -> AgentMessage:

@@ -139,6 +139,20 @@ class GraphSettings(BaseSettings):
     NEO4J_PASSWORD: SecretStr = SecretStr("password")
 
 
+class FrameworkExpansionSettings(BaseSettings):
+    # Semantic Cache
+    ENABLE_SEMANTIC_CACHE: bool = True
+    SEMANTIC_CACHE_THRESHOLD: float = 0.9  # Similarity threshold
+    SEMANTIC_CACHE_TTL: int = 3600 * 24  # 24 hours
+
+    # Reflector
+    ENABLE_REFLECTOR: bool = True
+    REFLECTOR_THRESHOLD: float = 0.8
+
+    # Parsing (Unstructured)
+    PREFER_UNSTRUCTURED: bool = True
+
+
 class DefaultRateLimitSettings(BaseSettings):
     DEFAULT_RATE_LIMIT_LIMIT: int = 10
     DEFAULT_RATE_LIMIT_PERIOD: int = 3600
@@ -304,6 +318,16 @@ class Settings(
     AgentRateLimitSettings,
     GraphSettings,
 ):
+    # --- Framework Expansion (V4.0) ---
+    ENABLE_SEMANTIC_CACHE: bool = True
+    SEMANTIC_CACHE_THRESHOLD: float = 0.9
+    SEMANTIC_CACHE_TTL: int = 3600 * 24
+
+    ENABLE_REFLECTOR: bool = True
+    REFLECTOR_THRESHOLD: float = 0.8
+
+    PREFER_UNSTRUCTURED: bool = True
+
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".env"),
         env_file_encoding="utf-8",

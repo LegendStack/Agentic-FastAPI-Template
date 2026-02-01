@@ -150,8 +150,9 @@ class TestDocumentIndexerIntegration:
     """Integration tests for Document Indexer."""
 
     @pytest.mark.asyncio
+    @patch("src.app.agents.indexers.UnstructuredFileLoader")
     @patch("src.app.agents.indexers.TextLoader")
-    async def test_full_document_indexing_flow(self, mock_loader):
+    async def test_full_document_indexing_flow(self, mock_loader, mock_unstructured):
         """Test the full document indexing flow."""
         from src.app.agents.indexers import DocumentIndexer
 
@@ -163,6 +164,7 @@ class TestDocumentIndexerIntegration:
         mock_loader_instance = MagicMock()
         mock_loader_instance.load.return_value = [mock_doc]
         mock_loader.return_value = mock_loader_instance
+        mock_unstructured.return_value = mock_loader_instance
 
         # Mock vector store
         mock_vector_store = AsyncMock()

@@ -15,6 +15,14 @@ Usage:
 
 import logging
 
+# Standardized globals for caching (V4.0)
+try:
+    from langchain_core.globals import set_llm_cache
+    from langchain_redis import RedisSemanticCache
+except ImportError:
+    set_llm_cache = None  # type: ignore
+    RedisSemanticCache = None  # type: ignore
+
 from .clients import (
     AzureOpenAIClient,
     AzureSearchClient,
@@ -27,6 +35,7 @@ from .clients import (
     MicrosoftGraphClient,
     client_factory,
 )
+from .config import settings
 from .credentials import AuthMode
 
 logger = logging.getLogger(__name__)
@@ -55,8 +64,6 @@ def configure_integrations(factory: IntegrationClientFactory | None = None) -> N
 
     Reads settings from app.core.config.settings and configures the client factory.
     """
-    from .config import settings
-
     factory = factory or client_factory
 
     # -------------------------------------------------------------------------
@@ -262,6 +269,28 @@ def configure_integrations(factory: IntegrationClientFactory | None = None) -> N
         )
         factory.configure(config)
         logger.info(f"Azure Blob Storage configured with {auth_mode.value} auth")
+
+    # -------------------------------------------------------------------------
+    # Semantic Caching (V4.0)
+    # -------------------------------------------------------------------------
+    if getattr(settings, "ENABLE_SEMANTIC_CACHE", False):
+        if set_llm_cache and RedisSemanticCache:
+            try:
+                from ..agents.azure_openai import get_azure_openai_embeddings
+
+                set_llm_cache(
+                    RedisSemanticCache(
+                        redis_url=settings.REDIS_URL,
+                        embedding=get_azure_openai_embeddings(),
+                        distance_threshold=settings.SEMANTIC_CACHE_THRESHOLD,
+                        ttl=settings.SEMANTIC_CACHE_TTL,
+                    )
+                )
+                logger.info("Semantic caching enabled via Redis")
+            except Exception as e:
+                logger.error(f"Failed to initialize semantic cache: {e}")
+        else:
+            logger.warning("langchain-redis or dependencies not found. Semantic caching disabled.")
 
 
 # =============================================================================

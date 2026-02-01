@@ -58,12 +58,10 @@ Built on top of the original foundation, we've added a professional agentic laye
 *   **Reliability Patterns**: Industrial-strength **Circuit Breakers** and **Retries** for all external LLM and API calls.
 *   **Observability**: Full **OpenTelemetry** integration (Datadog/Honeycomb) with per-tenant **Cost Tracking**.
 *   **Prompt Governance**: Professional Prompt Registry with versioning, rollbacks, and A/B test support.
-*   **RAG Evaluation (V3.0)**: Automated quality metrics using **Ragas** (Faithfulness, Relevancy, Precision).
-*   **Safety Guardrails (V3.0)**: Real-time **PII Scanning**, masking, and LLM-based hallucination detection.
-*   **Multi-Agent Teams (V3.0)**: Hierarchical orchestration using the **Supervisor Pattern**.
-*   **Graph-RAG (V3.0)**: Hybrid retrieval combining **Neo4j** knowledge graphs with vector search.
-*   **LegendStack Studio (V3.0)**: Professional **Streamlit** dashboard for monitoring and HITL approvals.
 *   **LegendStack CLI (V3.0)**: Developer scaffolding tool to generate agents and connectors in seconds.
+*   **Semantic Caching (V4.0)**: Frame-work wide Redis-backed caching using similarity distance for reduced latency and LLM costs.
+*   **Self-Correction (V4.0)**: Autonomous agent improvement using the **Reflector Pattern** and internal evaluation loops.
+*   **High-Fidelity Parsing (V4.0)**: Enterprise-grade document ingestion for complex layouts and tables via **Unstructured.io**.
 
 <details>
 <summary><b>🚀 Quick Start: Use Azure OpenAI in 3 lines</b></summary>

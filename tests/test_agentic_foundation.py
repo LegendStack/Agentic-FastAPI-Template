@@ -119,8 +119,9 @@ class TestDocumentIndexer:
     """Tests for Document Indexer with mocked dependencies."""
 
     @pytest.mark.asyncio
+    @patch("src.app.agents.indexers.UnstructuredFileLoader")
     @patch("src.app.agents.indexers.TextLoader")
-    async def test_run_indexes_file(self, mock_loader):
+    async def test_run_indexes_file(self, mock_loader, mock_unstructured):
         from src.app.agents.indexers import DocumentIndexer
 
         mock_vector_store = AsyncMock()
@@ -136,6 +137,7 @@ class TestDocumentIndexer:
         mock_loader_instance = MagicMock()
         mock_loader_instance.load.return_value = [mock_doc]
         mock_loader.return_value = mock_loader_instance
+        mock_unstructured.return_value = mock_loader_instance
 
         indexer = DocumentIndexer(mock_vector_store, mock_llm_service)
         result = await indexer.run(file_path="test.txt")
