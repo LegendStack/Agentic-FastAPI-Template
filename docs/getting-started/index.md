@@ -169,6 +169,15 @@ Now that you have the basics running, explore these guides to learn more:
 - **[Testing](../user-guide/testing.md)** - Write tests for your API
 - **[Production Deployment](../user-guide/production.md)** - Deploy to production
 
+### Interactive Learning
+- **[Jupyter Tutorial](../tutorials/index.md#jupyter-notebook-tutorial)** - Hands-on 8-chapter notebook
+- **[Streamlit App](../tutorials/index.md#interactive-streamlit-app)** - Guided visual walkthrough
+
+### Developer Guides
+- **[Integration Guide](../guides/integration.md)** - Connect Azure OpenAI, AI Search, Neo4j
+- **[Customization Cookbook](../guides/cookbook.md)** - Add your business logic
+- **[Production Checklist](../guides/production-checklist.md)** - Security & scaling
+
 ## Alternative Setup Methods
 
 Not using Docker? No problem!

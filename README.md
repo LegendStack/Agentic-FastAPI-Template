@@ -1,6 +1,6 @@
-<h1 align="center"> LegendStack Agentic FastAPI Template</h1>
+<h1 align="center">🚀 LegendStack Agentic FastAPI Template</h1>
 <p align="center" markdown=1>
-  <i><b>Enterprise-ready Agentic AI template</b> built on top of FastAPI and LangGraph. Batteries-included with production-ready defaults.</i>
+  <i><b>Ship production-ready AI agents in hours, not months.</b></i>
 </p>
 
 <p align="center">
@@ -10,63 +10,146 @@
 </p>
 
 <p align="center">
-📚 <a href="https://LegendStack.github.io/agentic-fastapi-template/">Docs</a> · 💬 <a href="https://discord.gg/legendstack">Discord</a>
+  <a href="https://github.com/LegendStack/agentic-fastapi-template/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/LegendStack/agentic-fastapi-template/test.yml?style=flat-square&label=tests" alt="Tests">
+  </a>
+  <a href="https://github.com/LegendStack/agentic-fastapi-template">
+    <img src="https://img.shields.io/badge/python-3.11+-blue?style=flat-square&logo=python&logoColor=white" alt="Python">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
+  </a>
+  <a href="https://LegendStack.github.io/agentic-fastapi-template/">
+    <img src="https://img.shields.io/badge/docs-online-blue?style=flat-square" alt="Docs">
+  </a>
+  <a href="https://discord.gg/legendstack">
+    <img src="https://img.shields.io/badge/discord-join-7289da?style=flat-square&logo=discord&logoColor=white" alt="Discord">
+  </a>
 </p>
-
-> [!NOTE]
-> **Educational Purpose**: This project is intended for educational purposes and as a reference implementation for Agentic AI patterns. While built with enterprise practices in mind, please review all security configurations before deploying to production.
 
 <p align="center">
-  <a href="https://fastapi.tiangolo.com">
-      <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI">
-  </a>
-  <a href="https://www.postgresql.org">
-      <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  </a>
-  <a href="https://redis.io">
-      <img src="https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=fff&style=for-the-badge" alt="Redis">
-  </a>
-  <a href="https://deepwiki.com/LegendStack/Agentic-FastAPI-Template">
-      <img src="https://img.shields.io/badge/DeepWiki-1F2937?style=for-the-badge&logoColor=white" alt="DeepWiki">
-  </a>
+📚 <a href="https://LegendStack.github.io/agentic-fastapi-template/">Documentation</a> · 
+🎓 <a href="docs/tutorials/index.md">Tutorials</a> · 
+🔧 <a href="docs/guides/index.md">Guides</a> · 
+💬 <a href="https://discord.gg/legendstack">Discord</a>
 </p>
 
-## Features
+---
 
-* ⚡️ **Fully Async**: FastAPI + SQLAlchemy 2.0 for maximum concurrency
-* 🧱 **Pydantic V2**: Ultra-fast data validation and serialization
-* 🔐 **Hybrid Auth**: JWT-based (access + refresh), SECURE cookie storage, and **Microsoft Entra ID** (Azure AD) native support
-* 👮 **Advanced Rate Limiting**: Per-tenant limits with tiered service levels (Free/Standard/Premium)
-* 🧰 **FastCRUD**: Automated CRUD endpoints with advanced filtering and pagination
-* 🧑‍💼 **CRUDAdmin**: Clean, plug-and-play admin interface
-* 🚦 **Background Processing**: ARQ (Redis-backed) for reliable task execution
-* 🧊 **Elastic Caching**: Multi-layer Redis caching (server-side + client-side headers)
-* 🐳 **Cloud-Native**: One-command Docker Compose setup
-* 🚀 **Production Recipes**: Optimized NGINX, Gunicorn, and Uvicorn configurations
+## ⚡ Time to First Agent
 
-### 🤖 Agentic AI Framework (The LegendStack Edge)
+```bash
+git clone https://github.com/LegendStack/agentic-fastapi-template
+cd agentic-fastapi-template && docker compose up
+```
 
-Built on top of the original foundation, we've added a professional agentic layer:
+**That's it.** Your agent is running at `http://localhost:8000/docs` with:
+- 🤖 Demo Agent showcasing all features (no API keys needed)
+- 📚 RAG pipeline with vector search
+- 🛡️ Safety guardrails (PII masking, moderation)
+- 💬 Real-time streaming (SSE/WebSocket)
 
-*   **LangGraph Orchestration**: Robust multi-agent workflows with state management and persistent memory.
-*   **Enterprise RAG Pipeline**: High-performance document ingestion (PDF, MD, TXT) with **pgvector** or **Azure AI Search** backends.
-*   **Deep Reranking**: Built-in support for **Cross-Encoders** and **Cohere** reranking to boost search precision.
-*   **Enterprise Connectors**: Native, incremental indexers for **Jira**, **Confluence**, **SharePoint**, and **OneDrive**.
-*   **Human-in-the-Loop (HITL)**: Flexible approval workflows for sensitive AI actions (Email, DB writes, etc.).
-*   **Universal Auth System**: Unified credential management supporting API Keys, OAuth2, and **Azure Managed Identity**.
-*   **Real-Time Interaction**: SSE (Server-Sent Events) and **WebSockets** for low-latency, token-by-token streaming.
-*   **Reliability Patterns**: Industrial-strength **Circuit Breakers** and **Retries** for all external LLM and API calls.
-*   **Observability**: Full **OpenTelemetry** integration (Datadog/Honeycomb) with per-tenant **Cost Tracking**.
-*   **Prompt Governance**: Professional Prompt Registry with versioning, rollbacks, and A/B test support.
-*   **LegendStack CLI (V3.0)**: Developer scaffolding tool to generate agents and connectors in seconds.
-*   **Semantic Caching (V4.0)**: Frame-work wide Redis-backed caching using similarity distance for reduced latency and LLM costs.
-*   **Self-Correction (V4.0)**: Autonomous agent improvement using the **Reflector Pattern** and internal evaluation loops.
-*   **High-Fidelity Parsing (V4.0)**: Enterprise-grade document ingestion for complex layouts and tables via **Unstructured.io**.
-*   **Entity-Aware Memory (V4.1)**: Cross-thread relationship tracking and recall using **Neo4j** knowledge graphs.
-*   **Zero-Trust Security (V4.1)**: Multi-tenant **BYOK** (Bring Your Own Key) encryption-at-rest for RAG document segments.
+> [!TIP]
+> **New to LegendStack?** Start with the [Interactive Tutorial](docs/tutorials/index.md) — it walks you through every feature in 90 minutes.
+
+---
+
+## 🎯 Why LegendStack?
+
+| Building AI Agents From Scratch | With LegendStack |
+|--------------------------------|------------------|
+| Set up FastAPI, auth, database, caching... | ✅ Batteries included |
+| Build RAG pipeline from scratch | ✅ Production-ready RAG with reranking |
+| Figure out LangGraph patterns | ✅ 11 modular node examples |
+| Add safety guardrails | ✅ PII masking, moderation built-in |
+| Implement caching, rate limiting | ✅ Semantic cache, tiered limits |
+| Debug memory, threading issues | ✅ Entity-aware cross-thread memory |
+| Build monitoring, cost tracking | ✅ OpenTelemetry + cost tracking |
+| **Weeks/Months** | **Hours** |
+
+---
+
+## 🏗️ What's Included
+
+<table>
+<tr>
+<td width="50%">
+
+### 🔧 Core Platform
+- ⚡ FastAPI + SQLAlchemy 2.0 (fully async)
+- 🔐 JWT Auth + Microsoft Entra ID (Azure AD)
+- 👮 Tiered Rate Limiting (Free/Standard/Premium)
+- 🧊 Redis Caching + Background Jobs (ARQ)
+- 🐳 Docker Compose (dev/staging/production)
+
+</td>
+<td width="50%">
+
+### 🤖 Agentic AI Framework
+- 🧠 LangGraph Orchestration with state management
+- 📚 RAG with pgvector or Azure AI Search
+- 🔗 Graph-RAG with Neo4j knowledge graphs
+- 🛡️ Safety Guardrails (PII, moderation)
+- ⚡ Semantic Caching (reduce LLM costs 70%+)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🔌 Enterprise Integrations
+- 📝 Jira, Confluence, SharePoint, OneDrive
+- 🔍 Azure OpenAI, Cohere, Cross-Encoders
+- 📊 OpenTelemetry (Datadog, Honeycomb)
+- 🔐 Azure Key Vault, Managed Identity
+
+</td>
+<td width="50%">
+
+### 🎓 Developer Experience
+- 🖥️ LegendStack Studio (Streamlit dashboard)
+- 🛠️ CLI for scaffolding agents/connectors
+- 📓 Jupyter Tutorial (8 chapters)
+- 📋 Production Checklist (28 items)
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📚 Learning Resources
+
+| Resource | Format | Time | Best For |
+|----------|--------|------|----------|
+| [**Quick Start**](docs/getting-started/index.md) | Docs | 5 min | Get running fast |
+| [**Jupyter Tutorial**](notebooks/tutorial.ipynb) | Notebook | 90 min | Hands-on learning |
+| [**Streamlit Walkthrough**](studio/tutorial_app.py) | Web App | 30 min | Visual learners |
+| [**Integration Guide**](docs/guides/integration.md) | Docs | 15 min | Connect real services |
+| [**Customization Cookbook**](docs/guides/cookbook.md) | Docs | — | Add your logic |
+| [**Production Checklist**](docs/guides/production-checklist.md) | Checklist | — | Pre-deploy review |
+
+---
+
+## 🚀 Quick Start Examples
 
 <details>
-<summary><b>🚀 Quick Start: Use Azure OpenAI in 3 lines</b></summary>
+<summary><b>🤖 Chat with the Demo Agent</b></summary>
+
+```python
+from app.agents.demo import LegendDemoAgent
+
+agent = LegendDemoAgent()  # Uses mocks (no API keys needed)
+result = await agent.chat("What is LegendStack?")
+
+print(result["response"])
+print(result["features_used"])  # Shows which features were invoked
+```
+
+</details>
+
+<details>
+<summary><b>☁️ Connect Azure OpenAI</b></summary>
 
 ```python
 from app.core.integration_config import configure_integrations, get_azure_openai_client
@@ -79,12 +162,11 @@ response = await client.chat([{"role": "user", "content": "Hello!"}], deployment
 </details>
 
 <details>
-<summary><b>🔍 Quick Start: RAG with Reranking</b></summary>
+<summary><b>🔍 RAG with Reranking</b></summary>
 
 ```python
 from app.agents import RerankingService, CrossEncoderReranker
 
-# Search → Rerank → Use top results
 docs = await vector_store.search("How to deploy?", k=20)
 reranker = RerankingService(CrossEncoderReranker())
 top_docs = await reranker.rerank("How to deploy?", docs, top_k=5)
@@ -93,7 +175,7 @@ top_docs = await reranker.rerank("How to deploy?", docs, top_k=5)
 </details>
 
 <details>
-<summary><b>🛡️ Quick Start: Resilient LLM Calls</b></summary>
+<summary><b>🛡️ Resilient LLM Calls</b></summary>
 
 ```python
 from app.agents import ResilientClient
@@ -105,203 +187,121 @@ result = await client.execute(call_llm, prompt)  # Auto-retries on failure
 </details>
 
 <details>
-<summary><b>📊 Quick Start: Rate Limiting</b></summary>
-
-```python
-from app.agents import rate_limiter
-
-await rate_limiter.enforce_limit("tenant-123", tokens_requested=1000)
-# ... make LLM call ...
-await rate_limiter.record_usage("tenant-123", tokens_used=500)
-```
-
-</details>
-
-<details>
-<summary><b>🛠️ Quick Start: LegendStack CLI</b></summary>
+<summary><b>🛠️ CLI: Generate New Agent</b></summary>
 
 ```bash
-# Generate a new agent
-uv run python src/app/cli/main.py create-agent Researcher
-
-# Generate a new connector
+uv run python src/app/cli/main.py create-agent CustomerSupport
 uv run python src/app/cli/main.py create-connector Slack
-
-# Run RAG evaluation
-uv run python src/app/cli/main.py evaluate-rag
 ```
 
 </details>
 
 <details>
-<summary><b>🖥️ Quick Start: LegendStack Studio</b></summary>
+<summary><b>🖥️ Launch Studio Dashboard</b></summary>
 
 ```bash
-# Launch the monitoring dashboard
-uv run streamlit run studio/main.py
+streamlit run studio/main.py
 ```
 
 </details>
-
-> 📚 Full agentic docs: [`docs/agents/README.md`](docs/agents/README.md)
-
-
-## Why and When to use it
-
-**Perfect if you want:**
-
-* A pragmatic starter with auth, CRUD, jobs, caching and rate-limits
-* **Enterprise-ready AI agents** with LangGraph, RAG, and Azure OpenAI
-* **Sensible defaults** with the freedom to opt-out of modules
-* **Docs over boilerplate** in README - depth lives in the site
-
-> **Not a fit** if you need a monorepo microservices scaffold - [see the docs](https://benavlabs.github.io/Agentic-FastAPI-Template/user-guide/project-structure/) for pointers.
-
-## TL;DR - Quickstart
-
-Use the template on GitHub, create your repo, then:
-
-```bash
-git clone https://github.com/LegendStack/agentic-fastapi-template
-cd agentic-fastapi-template
-```
-
-**Quick setup:** Run the interactive setup script to choose your deployment configuration:
-
-```bash
-./setup.py
-```
-
-Or directly specify the deployment type: `./setup.py local`, `./setup.py staging`, or `./setup.py production`.
-
-The script copies the right files for your deployment scenario. Here's what each option sets up:
-
-### Option 1: Local development with Uvicorn
-
-Best for: **Development and testing**
-
-**Copies:**
-
-- `scripts/local_with_uvicorn/Dockerfile` → `Dockerfile`
-- `scripts/local_with_uvicorn/docker-compose.yml` → `docker-compose.yml`
-- `scripts/local_with_uvicorn/.env.example` → `src/.env`
-
-Sets up Uvicorn with auto-reload enabled. The example environment values work fine for development.
-
-**Manual setup:** `./setup.py local` or copy the files above manually.
-
-### Option 2: Staging with Gunicorn managing Uvicorn workers
-
-Best for: **Staging environments and load testing**
-
-**Copies:**
-
-- `scripts/gunicorn_managing_uvicorn_workers/Dockerfile` → `Dockerfile`
-- `scripts/gunicorn_managing_uvicorn_workers/docker-compose.yml` → `docker-compose.yml`
-- `scripts/gunicorn_managing_uvicorn_workers/.env.example` → `src/.env`
-
-Sets up Gunicorn managing multiple Uvicorn workers for production-like performance testing.
-
-> [!WARNING]
-> Change `SECRET_KEY` and passwords in the `.env` file for staging environments.
-
-**Manual setup:** `./setup.py staging` or copy the files above manually.
-
-### Option 3: Production with NGINX
-
-Best for: **Production deployments**
-
-**Copies:**
-
-- `scripts/production_with_nginx/Dockerfile` → `Dockerfile`
-- `scripts/production_with_nginx/docker-compose.yml` → `docker-compose.yml`
-- `scripts/production_with_nginx/.env.example` → `src/.env`
-
-Sets up NGINX as reverse proxy with Gunicorn + Uvicorn workers for production.
-
-> [!CAUTION]
-> You MUST change `SECRET_KEY`, all passwords, and sensitive values in the `.env` file before deploying!
-
-**Manual setup:** `./setup.py production` or copy the files above manually.
 
 ---
 
-**Start your application:**
+## ⏱️ Time to Production
 
+| Milestone | Time |
+|-----------|------|
+| Clone & run with mocks | 5 min |
+| Connect real Azure OpenAI | 30 min |
+| Customize for your use case | 2-4 hours |
+| Production-ready | 1-2 days |
+
+---
+
+## 🏃 Setup Options
+
+**Interactive setup:**
+```bash
+./setup.py  # Choose: local / staging / production
+```
+
+| Environment | Config | Best For |
+|-------------|--------|----------|
+| `local` | Uvicorn + auto-reload | Development |
+| `staging` | Gunicorn + workers | Load testing |
+| `production` | NGINX + Gunicorn | Deployment |
+
+Then:
 ```bash
 docker compose up
 ```
 
-**Access your app:**
-- **Local**: http://127.0.0.1:8000 (auto-reload enabled) → [API docs](http://127.0.0.1:8000/docs)
-- **Staging**: http://127.0.0.1:8000 (production-like performance)
-- **Production**: http://localhost (NGINX reverse proxy)
+> 📖 Full setup guide: [Getting Started](https://LegendStack.github.io/agentic-fastapi-template/getting-started/)
 
-### Next steps
+---
 
-**Create your first admin user:**
-```bash
-docker compose run --rm create_superuser
+## 🗺️ Project Structure
+
+```
+src/app/
+├── agents/           # 🤖 Agentic AI framework
+│   ├── demo/         #    Demo agent with all features
+│   ├── nodes/        #    Reusable LangGraph nodes
+│   ├── connectors/   #    Enterprise integrations
+│   └── guardrails/   #    Safety & moderation
+├── api/v1/           # 🔌 REST endpoints
+├── core/             # ⚙️ Config, DB, auth
+└── cli/              # 🛠️ Developer tools
+
+docs/
+├── getting-started/  # 📚 Quick start
+├── tutorials/        # 🎓 Interactive learning
+├── guides/           # 🔧 Integration & cookbook
+└── user-guide/       # 📖 Detailed reference
+
+notebooks/
+└── tutorial.ipynb    # 📓 8-chapter Jupyter tutorial
+
+studio/
+└── tutorial_app.py   # 🖥️ Streamlit walkthrough
 ```
 
-**Run database migrations** (if you add models):
-```bash
-cd src && uv run alembic revision --autogenerate && uv run alembic upgrade head
-```
+---
 
-**Test background jobs:**
-```bash
-curl -X POST 'http://127.0.0.1:8000/api/v1/tasks/task?message=hello'
-```
-
-**Or run locally without Docker:**
-```bash
-uv sync && uv run uvicorn src.app.main:app --reload
-```
-
-> Full setup (from-scratch, .env examples, PostgreSQL & Redis, gunicorn, nginx) lives in the [docs](https://LegendStack.github.io/agentic-fastapi-template/getting-started/installation/).
-
-## Configuration (minimal)
-
-Create `src/.env` and set **app**, **database**, **JWT**, and **environment** settings. See the [docs](https://LegendStack.github.io/agentic-fastapi-template/getting-started/configuration/) for a copy-pasteable example and production guidance.
-
-[https://LegendStack.github.io/agentic-fastapi-template/getting-started/configuration/](https://LegendStack.github.io/agentic-fastapi-template/getting-started/configuration/)
-
-* `ENVIRONMENT=local|staging|production` controls API docs exposure
-* Set `ADMIN_*` to enable the first admin user
-
-## Common tasks
+## 🧪 Testing
 
 ```bash
-# run locally with reload (without Docker)
-uv sync && uv run uvicorn src.app.main:app --reload
+# Run all tests (161 tests)
+uv run pytest tests/ -v
 
-# run Alembic migrations
-cd src && uv run alembic revision --autogenerate && uv run alembic upgrade head
-
-# enqueue a background job (example endpoint)
-curl -X POST 'http://127.0.0.1:8000/api/v1/tasks/task?message=hello'
+# Run specific test file
+uv run pytest tests/test_demo_agent.py -v
 ```
 
-More examples (superuser creation, tiers, rate limits, admin usage) in the [docs](https://LegendStack.github.io/agentic-fastapi-template/getting-started/first-run/).
+---
 
-## Contributing
+## 🤝 Contributing
 
-Read [contributing](CONTRIBUTING.md).
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## Inspiration
+- 🐛 [Report bugs](https://github.com/LegendStack/agentic-fastapi-template/issues)
+- 💡 [Request features](https://github.com/LegendStack/agentic-fastapi-template/issues)
+- 📖 [Improve docs](https://github.com/LegendStack/agentic-fastapi-template/tree/main/docs)
 
-This project was built from the ground up as an Enterprise AI foundation, drawing inspiration from best practices in several open-source projects:
-- [`tiangolo/full-stack-fastapi-postgresql`](https://github.com/tiangolo/full-stack-fastapi-postgresql) - Initial project layout inspiration
-- [`FastAPI Microservices`](https://github.com/Kludex/fastapi-microservices) - Resilience patterns
-- [`Async Web API with FastAPI + SQLAlchemy 2.0`](https://github.com/rhoboro/async-fastapi-sqlalchemy)
-- [`FastAPI Rocket Boilerplate`](https://github.com/asacristani/fastapi-rocket-boilerplate/tree/main)
+---
 
-## License
+## 📜 License
 
-[`MIT`](LICENSE)
+[MIT](LICENSE) — use it for anything.
 
-<hr>
-<a href="https://legendstack.it">
-  <img src="https://github.com/LegendStack/agentic-fastapi-template/raw/main/docs/assets/banner.png" alt="Powered by LegendStack - legendstack.it"/>
-</a>
+---
+
+<p align="center">
+  <sub>Built with ❤️ by the LegendStack team</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/LegendStack/agentic-fastapi-template">
+    <img src="https://img.shields.io/github/stars/LegendStack/agentic-fastapi-template?style=social" alt="GitHub Stars">
+  </a>
+</p>
