@@ -288,11 +288,11 @@ class ComponentRegistry:
         """Register default built-in components."""
         self._vector_stores["pgvector"] = PgVectorStore
         if AzureAISearchStore:
-            self._vector_stores["azure_search"] = AzureAISearchStore
+            self._vector_stores["azure_search"] = AzureAISearchStore  # type: ignore
 
         self._indexers["document"] = DocumentIndexer
         if JiraIndexer:
-            self._indexers["jira"] = JiraIndexer
+            self._indexers["jira"] = JiraIndexer  # type: ignore
 
         self._agents["doc_assistant"] = DocAssistantAgent
 

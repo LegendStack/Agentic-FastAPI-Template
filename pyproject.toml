@@ -49,6 +49,10 @@ dependencies = [
     "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
     "opentelemetry-instrumentation-httpx>=0.46b0",
     "opentelemetry-instrumentation-redis>=0.46b0",
+    "ragas>=0.4.3",
+    "datasets>=4.5.0",
+    "neo4j>=6.1.0",
+    "streamlit>=1.53.1",
 ]
 
 [project.optional-dependencies]

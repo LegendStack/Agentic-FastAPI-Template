@@ -38,6 +38,15 @@
 
 Agentic FastAPI Template is a comprehensive, enterprise-ready template for building scalable AI agents and async APIs. It combines advanced agent orchestration (LangGraph), RAG pipelines, enterprise integrations, and resilience patterns into a single production-ready foundation.
 
+### 🌟 New in V3.0: The Agentic Framework
+LegendStack has evolved into a complete framework with:
+- **RAG Evaluation Engine**: Automated quality metrics using Ragas.
+- **Safety Guardrails**: PII masking and hallucination detection.
+- **Multi-Agent Orchestration**: Supervisor pattern for complex team workflows.
+- **Graph-RAG**: Hybrid Vector + Neo4j relationship search.
+- **LegendStack Studio**: Professional monitoring and HITL dashboard.
+- **Developer CLI**: Scaffolding tool for rapid component development.
+
 ## Core Technologies
 
 This boilerplate leverages cutting-edge Python technologies:

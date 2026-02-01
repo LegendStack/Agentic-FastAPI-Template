@@ -58,6 +58,12 @@ Built on top of the original foundation, we've added a professional agentic laye
 *   **Reliability Patterns**: Industrial-strength **Circuit Breakers** and **Retries** for all external LLM and API calls.
 *   **Observability**: Full **OpenTelemetry** integration (Datadog/Honeycomb) with per-tenant **Cost Tracking**.
 *   **Prompt Governance**: Professional Prompt Registry with versioning, rollbacks, and A/B test support.
+*   **RAG Evaluation (V3.0)**: Automated quality metrics using **Ragas** (Faithfulness, Relevancy, Precision).
+*   **Safety Guardrails (V3.0)**: Real-time **PII Scanning**, masking, and LLM-based hallucination detection.
+*   **Multi-Agent Teams (V3.0)**: Hierarchical orchestration using the **Supervisor Pattern**.
+*   **Graph-RAG (V3.0)**: Hybrid retrieval combining **Neo4j** knowledge graphs with vector search.
+*   **LegendStack Studio (V3.0)**: Professional **Streamlit** dashboard for monitoring and HITL approvals.
+*   **LegendStack CLI (V3.0)**: Developer scaffolding tool to generate agents and connectors in seconds.
 
 <details>
 <summary><b>🚀 Quick Start: Use Azure OpenAI in 3 lines</b></summary>
@@ -107,6 +113,32 @@ from app.agents import rate_limiter
 await rate_limiter.enforce_limit("tenant-123", tokens_requested=1000)
 # ... make LLM call ...
 await rate_limiter.record_usage("tenant-123", tokens_used=500)
+```
+
+</details>
+
+<details>
+<summary><b>🛠️ Quick Start: LegendStack CLI</b></summary>
+
+```bash
+# Generate a new agent
+uv run python src/app/cli/main.py create-agent Researcher
+
+# Generate a new connector
+uv run python src/app/cli/main.py create-connector Slack
+
+# Run RAG evaluation
+uv run python src/app/cli/main.py evaluate-rag
+```
+
+</details>
+
+<details>
+<summary><b>🖥️ Quick Start: LegendStack Studio</b></summary>
+
+```bash
+# Launch the monitoring dashboard
+uv run streamlit run studio/main.py
 ```
 
 </details>

@@ -17,6 +17,11 @@ A production-ready, enterprise-grade agentic AI framework built on FastAPI with 
 11. [Enterprise Indexers](#enterprise-indexers)
 12. [Admin API](#admin-api)
 13. [Observability](#observability)
+14. [RAG Evaluation (V3.0)](#rag-evaluation-v30)
+15. [Safety & Guardrails (V3.0)](#safety--guardrails-v30)
+16. [Multi-Agent Orchestration (V3.0)](#multi-agent-orchestration-v30)
+17. [Graph-RAG (V3.0)](#graph-rag-v30)
+18. [LegendStack Studio & CLI (V3.0)](#legendstack-studio--cli-v30)
 
 ---
 
@@ -51,30 +56,34 @@ configure_integrations()
 
 ```
 src/app/
-├── agents/                 # Agentic framework (25 modules)
+├── agents/                 # Agentic framework (30+ modules)
 │   ├── base.py            # Core abstractions
 │   ├── azure_openai.py    # LLM service
+│   ├── supervisor.py      # [NEW] Multi-agent orchestrator
+│   ├── graph_retriever.py # [NEW] Hybrid Graph-RAG
 │   ├── vector_stores.py   # pgvector implementation
-│   ├── azure_search.py    # Azure AI Search
-│   ├── indexers.py        # Document indexer
-│   ├── jira.py            # Jira indexer
-│   ├── sharepoint.py      # SharePoint indexer
-│   ├── confluence.py      # Confluence indexer
+│   ├── connectors/        # [NEW] Ingestion marketplace
+│   │   ├── registry.py    # Central connector registry
+│   │   ├── slack.py       # Example connector
+│   │   └── zendesk.py     # Example connector
 │   ├── conversations.py   # Thread management
 │   ├── hitl.py            # Human-in-the-loop
-│   ├── multi_tenant.py    # Multi-tenancy
-│   ├── memory.py          # Context management
-│   ├── reranking.py       # RAG reranking
-│   ├── structured_output.py # Output validation
 │   ├── resilience.py      # Circuit breaker, retry
 │   ├── rate_limiting.py   # Per-tenant limits
-│   ├── websocket.py       # Real-time streaming
-│   ├── prompts.py         # Version control
 │   └── __init__.py        # Component registry
+├── eval/                  # [NEW] RAG Evaluation Engine
+│   ├── engine.py          # Ragas integration
+│   └── __init__.py
+├── guardrails/            # [NEW] Safety filters
+│   ├── pii.py             # PII masking
+│   ├── moderation.py      # Content moderation
+│   └── __init__.py
+├── cli/                   # [NEW] Scaffolding tool
+│   └── main.py            # legendstack-cli
 ├── core/
+│   ├── graph_db.py        # [NEW] Neo4j client
 │   ├── credentials.py     # Auth providers
-│   ├── clients.py         # Integration clients
-│   └── integration_config.py # Auto-configuration
+│   └── clients.py         # Integration clients
 └── api/v1/
     ├── agents.py          # Agent API
     └── admin_agents.py    # Admin API
@@ -647,6 +656,98 @@ uv run pytest tests/ --cov=src/app/agents --cov-report=html
 
 ---
 
+---
+
+## RAG Evaluation (V3.0)
+
+Automated quality metrics for RAG pipelines using **Ragas**.
+
+```python
+from app.eval import get_eval_engine
+
+engine = get_eval_engine()
+results = await engine.run_eval(
+    questions=["What is LegendStack?"],
+    answers=["LegendStack is an agentic framework..."],
+    contexts=[["LegendStack is an enterprise-ready template..."]],
+    ground_truths=["LegendStack is an agentic AI template built on FastAPI."]
+)
+
+# Output includes Faithfulness, Answer Relevancy, etc.
+print(results)
+```
+
+---
+
+## Safety & Guardrails (V3.0)
+
+Enterprise-grade security for LLM I/O.
+
+### PII Masking
+```python
+from app.guardrails import get_pii_guard
+
+guard = get_pii_guard()
+masked_text = guard.mask("My email is john@example.com")
+# Output: "My email is [MASKED]_EMAIL"
+```
+
+### Hallucination Detection
+```python
+from app.guardrails import get_moderator
+
+moderator = get_moderator()
+judgement = await moderator.check_hallucination(context, answer)
+print(judgement["is_hallucination"])
+```
+
+---
+
+## Multi-Agent Orchestration (V3.0)
+
+Coordinate complex tasks between specialized agents using the **Supervisor Pattern**.
+
+```python
+from app.agents.supervisor import SupervisorAgent
+
+supervisor = SupervisorAgent(workers=["Researcher", "DocumentExpert"])
+result = await supervisor.run("Research the latest AI trends in the docs.", thread_id="thread-456")
+```
+
+---
+
+## Graph-RAG (V3.0)
+
+Hybrid search combining Vector similarity with **Neo4j** relationship traversal.
+
+```python
+from app.agents.graph_retriever import GraphRetriever
+from app.core.graph_db import get_graph_client
+
+retriever = GraphRetriever(vector_store, get_graph_client())
+# Performs vector search + Cypher relationship expansion
+results = await retriever.retrieve(query_vector, k=5)
+```
+
+---
+
+## LegendStack Studio & CLI (V3.0)
+
+### Scaffolding CLI
+Generate framework-compliant components instantly.
+```bash
+uv run python src/app/cli/main.py create-agent MyNewAgent
+uv run python src/app/cli/main.py create-connector Slack
+```
+
+### Studio Dashboard
+Visual monitoring and HITL management.
+```bash
+uv run streamlit run studio/main.py
+```
+
+---
+
 ## Version History
 
 | Version | Features |
@@ -655,4 +756,4 @@ uv run pytest tests/ --cov=src/app/agents --cov-report=html
 | 1.1.0 | Azure Search, HITL, multi-tenant, background tasks |
 | 1.2.0 | OpenTelemetry, cost tracking, HNSW index |
 | 2.0.0 | Memory, reranking, resilience, rate limiting, prompts, WebSocket |
-| 2.1.0 | OAuth2 client system, Microsoft Graph, enterprise indexers |
+| 3.0.0 | **Framework Expansion**: Eval Engine, Safety Guardrails, Multi-Agent, Graph-RAG, Studio & CLI |

@@ -1,4 +1,3 @@
-
 from crudadmin import CRUDAdmin
 
 from ..core.config import EnvironmentOption, settings
