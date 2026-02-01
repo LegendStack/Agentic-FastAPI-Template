@@ -280,7 +280,40 @@ SHAREPOINT_AUTH_MODE=oauth2
 DEFAULT_RATE_LIMIT_TIER=standard
 ```
 
+
 ---
+
+## 🔒 Security & Privacy (V4.1)
+
+**Zero-Trust Encryption:**
+```python
+from app.core.security_utils import TenantEncryption
+
+# Encrypt data for a specific tenant
+encrypted = TenantEncryption.encrypt("secret_value", "tenant-1")
+
+# Decrypt (only works with correct tenant_id)
+decrypted = TenantEncryption.decrypt(encrypted, "tenant-1")
+```
+
+**Entity-Aware Memory:**
+```python
+# Automatic: Just set env var
+# ENABLE_ENTITY_MEMORY=true
+
+# Manual: Check graph connections
+from app.core.graph_db import GraphDBClient
+
+client = GraphDBClient()
+# Find entities related to "Project Omega"
+result = await client.execute_query(
+    "MATCH (e:Project {name: $name})<-[:RELATED]-(m) RETURN m",
+    {"name": "project omega"}
+)
+```
+
+---
+
 
 ## 🧪 Testing
 

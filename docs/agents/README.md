@@ -22,6 +22,11 @@ A production-ready, enterprise-grade agentic AI framework built on FastAPI with 
 16. [Multi-Agent Orchestration (V3.0)](#multi-agent-orchestration-v30)
 17. [Graph-RAG (V3.0)](#graph-rag-v30)
 18. [LegendStack Studio & CLI (V3.0)](#legendstack-studio--cli-v30)
+19. [Semantic Caching (V4.0)](#semantic-caching-v40)
+20. [Self-Correction / Reflector (V4.0)](#self-correction--reflector-v40)
+21. [High-Fidelity Parsing (V4.0)](#high-fidelity-parsing-v40)
+22. [Entity-Aware Memory (V4.1)](#entity-aware-memory-v41)
+23. [Zero-Trust Security (V4.1)](#zero-trust-security-v41)
 
 ---
 
@@ -757,3 +762,93 @@ uv run streamlit run studio/main.py
 | 1.2.0 | OpenTelemetry, cost tracking, HNSW index |
 | 2.0.0 | Memory, reranking, resilience, rate limiting, prompts, WebSocket |
 | 3.0.0 | **Framework Expansion**: Eval Engine, Safety Guardrails, Multi-Agent, Graph-RAG, Studio & CLI |
+| 4.0.0 | **Production Stability**: Semantic Caching, Self-Correction (Reflector), High-Fidelity Parsing |
+| 4.1.0 | **Enterprise Intelligence**: Entity-Aware Memory, Zero-Trust Security (BYOK) |
+---
+
+## Semantic Caching (V4.0)
+
+Low-latency caching for LLM responses using **Redis** and **LangChain**.
+
+### Features
+*   **Similarity-Based**: Cache hits are determined by semantic similarity (cosine distance), not just exact string matches.
+*   **Configurable**: Set threshold (`0.9`) and TTL (`24h`) via environment variables.
+*   **Redis-Backed**: High-performance storage compatible with clustered Redis.
+
+```python
+# Enabled by default in src/.env
+ENABLE_SEMANTIC_CACHE=true
+SEMANTIC_CACHE_THRESHOLD=0.9
+```
+
+---
+
+## Self-Correction / Reflector (V4.0)
+
+Autonomous quality improvement loop.
+
+### How it works
+1.  **Generate**: Original response is generated.
+2.  **Evaluate**: `EvalEngine` scores faithfulness and relevancy.
+3.  **Reflect**: If scores are low, the `Reflector` generates critique and feedback.
+4.  **Revise**: Agent regenerates the response using the feedback.
+
+```python
+from app.agents.reflector import Reflector
+
+reflector = Reflector(eval_engine, moderator)
+result = await reflector.reflect(question, response, context)
+if result["needs_revision"]:
+    # Regenerate
+```
+
+---
+
+## High-Fidelity Parsing (V4.0)
+
+Enterprise-grade document ingestion using **Unstructured.io**.
+
+### Capabilities
+*   **Tables**: Preserves table structure in PDFs.
+*   **complex Layouts**: Handles multi-column and form-based documents.
+*   **Fallback**: Automatically falls back to standard text extraction if Unstructured is unavailable.
+
+```python
+# src/.env
+PREFER_UNSTRUCTURED=true
+```
+
+---
+
+## Entity-Aware Memory (V4.1)
+
+Cross-thread relationship tracking.
+
+### Architecture
+*   **Entity Extraction Node**: An LLM-powered node scans user messages for people, projects, and systems.
+*   **Neo4j Storage**: Entities are stored/merged into a graph database.
+*   **Graph Retrieval**: Future queries fetch relevant entities regardless of the conversation thread.
+
+```python
+# src/.env
+ENABLE_ENTITY_MEMORY=true
+ENTITY_EXTRACTION_MODEL="gpt-4o"
+```
+
+---
+
+## Zero-Trust Security (V4.1)
+
+Multi-tenant Data Protection (BYOK).
+
+*   **Encryption-at-Rest**: All document chunks in **PgVector** are encrypted using a tenant-specific key derived from the master secret + tenant ID.
+*   **Encrypted Cache**: Semantic cache entries in **Redis** are encrypted to prevent cross-tenant data leaks.
+*   **Isolation**: Decryption only occurs at runtime within the authorized tenant context.
+
+```python
+from app.core.security_utils import TenantEncryption
+
+# Automatic encryption/decryption layers
+encrypted = TenantEncryption.encrypt("secret", "tenant-1")
+decrypted = TenantEncryption.decrypt(encrypted, "tenant-1")
+```
