@@ -184,6 +184,9 @@ from .resilience import (
 # Sample Agent (for reference)
 from .sample_agent import DocAssistantAgent
 
+# Backlog Assistant Agent
+from .backlog import BacklogAssistantAgent, BacklogAgentConfig
+
 # Streaming
 from .streaming import StreamingChatResponse, sse_stream
 
@@ -255,6 +258,9 @@ __all__ = [
     "record_llm_cost",
     # Sample
     "DocAssistantAgent",
+    # Backlog Assistant
+    "BacklogAssistantAgent",
+    "BacklogAgentConfig",
 ]
 
 
@@ -295,6 +301,7 @@ class ComponentRegistry:
             self._indexers["jira"] = JiraIndexer  # type: ignore
 
         self._agents["doc_assistant"] = DocAssistantAgent
+        self._agents["backlog_assistant"] = BacklogAssistantAgent
 
     # Vector Stores
     def register_vector_store(self, name: str, cls: type) -> None:

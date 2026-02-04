@@ -1,0 +1,469 @@
+"""
+Backlog Assistant Agent
+=======================
+Main agent class that orchestrates the story decomposition workflow.
+
+This agent uses LangGraph to manage a conversational workflow that:
+1. Parses epic descriptions
+2. Decomposes into user stories
+3. Refines based on user feedback
+4. Formats output (JSON/Markdown/JIRA)
+5. Optionally exports to JIRA
+
+Example Usage:
+    # Basic decomposition
+    agent = BacklogAssistantAgent()
+    result = await agent.decompose(
+        "We need to add SSO login support for enterprise customers"
+    )
+
+    # With conversation for refinement
+    result = await agent.chat(
+        thread_id="abc123",
+        message="Add more edge cases to the authentication stories"
+    )
+
+    # Export to JIRA
+    result = await agent.export_to_jira(thread_id="abc123")
+"""
+
+import logging
+import uuid
+from typing import Any, Literal
+
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.graph import END, START, StateGraph
+
+from .config import BacklogAgentConfig
+from .nodes import DecomposeNode, ExportNode, FormatNode, InputNode, RefineNode
+from .schemas import DecompositionResult
+from .state import BacklogAgentState
+
+logger = logging.getLogger(__name__)
+
+
+class BacklogAssistantAgent:
+    """
+    Backlog Assistant Agent - Story Decomposition with Conversational Refinement.
+
+    A state-of-the-art agent for breaking down epics into user stories.
+    Features modular LangGraph workflow, structured output, and JIRA integration.
+
+    Attributes:
+        config: Agent configuration with feature toggles
+        checkpointer: Optional persistence for conversation state
+
+    Example:
+        # Quick decomposition
+        agent = BacklogAssistantAgent()
+        result = await agent.decompose("Add user authentication")
+
+        # Custom configuration
+        config = BacklogAgentConfig(
+            STORY_TEMPLATE="bdd",
+            ENABLE_EDGE_CASES=True,
+            MAX_STORIES_PER_EPIC=8
+        )
+        agent = BacklogAssistantAgent(config=config)
+
+        # With conversation persistence
+        from ..persistence import SqlAlchemyCheckpointSaver
+        checkpointer = SqlAlchemyCheckpointSaver(db)
+        agent = BacklogAssistantAgent(checkpointer=checkpointer)
+    """
+
+    def __init__(
+        self,
+        config: BacklogAgentConfig | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
+    ):
+        """
+        Initialize the Backlog Assistant Agent.
+
+        Args:
+            config: Optional configuration. Defaults to all features enabled with mocks.
+            checkpointer: Optional LangGraph checkpointer for state persistence.
+        """
+        self.config = config or BacklogAgentConfig()
+        self.checkpointer = checkpointer
+
+        # Initialize nodes
+        self._init_nodes()
+
+        # Build the graph
+        self.graph = self._build_graph()
+
+        logger.info(f"BacklogAssistantAgent initialized with features: {self.config.get_enabled_features()}")
+
+    def _init_nodes(self) -> None:
+        """Initialize all workflow nodes."""
+        self.input_node = InputNode()
+        self.decompose_node = DecomposeNode(config=self.config)
+        self.refine_node = RefineNode(config=self.config)
+        self.format_node = FormatNode(config=self.config)
+        self.export_node = ExportNode(config=self.config)
+
+    def _build_graph(self) -> StateGraph:
+        """
+        Build the LangGraph workflow.
+
+        Flow:
+            START → input → [decompose | refine] → format → END
+                                                      ↓
+                                           (optional) export
+
+        The graph routes based on whether this is a new decomposition
+        or a refinement of an existing one.
+        """
+        workflow = StateGraph(BacklogAgentState)
+
+        # Add nodes
+        workflow.add_node("input", self.input_node)
+        workflow.add_node("decompose", self.decompose_node)
+        workflow.add_node("refine", self.refine_node)
+        workflow.add_node("format", self.format_node)
+        workflow.add_node("export", self.export_node)
+
+        # Define edges
+        workflow.add_edge(START, "input")
+
+        # Conditional routing after input
+        workflow.add_conditional_edges(
+            "input",
+            self._route_after_input,
+            {
+                "decompose": "decompose",
+                "refine": "refine",
+                "error": END,
+            },
+        )
+
+        # Both decompose and refine go to format
+        workflow.add_edge("decompose", "format")
+        workflow.add_edge("refine", "format")
+
+        # Format goes to end (export is triggered separately)
+        workflow.add_edge("format", END)
+
+        # Export also goes to end
+        workflow.add_edge("export", END)
+
+        return workflow.compile(checkpointer=self.checkpointer)
+
+    def _route_after_input(self, state: BacklogAgentState) -> str:
+        """Route based on whether this is a new decomposition or refinement."""
+        if state.get("error"):
+            return "error"
+
+        if state.get("is_first_message", True) or not state.get("stories"):
+            return "decompose"
+
+        return "refine"
+
+    async def decompose(
+        self,
+        epic_description: str,
+        context: str | None = None,
+        output_format: Literal["json", "markdown", "jira"] = "json",
+        thread_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Decompose an epic into user stories.
+
+        This is a convenience method for one-shot decomposition.
+
+        Args:
+            epic_description: The epic or feature to decompose
+            context: Optional additional context (tech stack, constraints)
+            output_format: Desired output format
+            thread_id: Optional thread ID for persistence
+
+        Returns:
+            Dictionary with decomposition result, formatted output, and metadata
+        """
+        thread_id = thread_id or str(uuid.uuid4())
+
+        # Build full input with context if provided
+        full_input = epic_description
+        if context:
+            full_input += f"\n\nContext: {context}"
+
+        return await self.chat(
+            thread_id=thread_id,
+            message=full_input,
+            output_format=output_format,
+        )
+
+    async def chat(
+        self,
+        thread_id: str,
+        message: str,
+        output_format: Literal["json", "markdown", "jira"] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Process a chat message for decomposition or refinement.
+
+        First message creates a decomposition, subsequent messages refine it.
+
+        Args:
+            thread_id: Conversation thread identifier
+            message: User's message (epic description or refinement feedback)
+            output_format: Optional output format override
+
+        Returns:
+            Dictionary with:
+                - thread_id: The conversation thread ID
+                - response: The decomposition result
+                - formatted_output: Output in requested format
+                - stories: List of user stories
+                - metadata: Additional information
+        """
+        logger.info(f"BacklogAssistantAgent: Processing message for thread {thread_id}")
+
+        # Prepare initial state
+        config = {"configurable": {"thread_id": thread_id}}
+
+        # Get existing state if any
+        existing_state = {}
+        if self.checkpointer:
+            try:
+                saved_state = await self.graph.aget_state(config)
+                if saved_state and saved_state.values:
+                    existing_state = saved_state.values
+            except Exception:
+                pass  # No saved state, will start fresh
+
+        # Build new state
+        messages = existing_state.get("messages", [])
+        messages.append({"role": "user", "content": message})
+
+        initial_state: BacklogAgentState = {
+            "messages": messages,
+            "epic_input": existing_state.get("epic_input", ""),
+            "parsed_epic": existing_state.get("parsed_epic"),
+            "stories": existing_state.get("stories", []),
+            "current_result": existing_state.get("current_result"),
+            "refinement_feedback": None,
+            "is_first_message": not existing_state.get("stories"),
+            "output_format": output_format or existing_state.get("output_format", self.config.DEFAULT_OUTPUT_FORMAT),
+            "formatted_output": None,
+            "export_result": None,
+            "thread_id": thread_id,
+            "tenant_id": None,
+            "error": None,
+            "metadata": existing_state.get("metadata", {}),
+        }
+
+        # Run the graph
+        final_state = None
+        async for event in self.graph.astream(initial_state, config=config, stream_mode="values"):
+            final_state = event
+
+        if not final_state:
+            return {
+                "thread_id": thread_id,
+                "error": "No result from agent",
+                "response": None,
+            }
+
+        # Check for errors
+        if final_state.get("error"):
+            return {
+                "thread_id": thread_id,
+                "error": final_state["error"],
+                "response": None,
+            }
+
+        # Build response
+        current_result = final_state.get("current_result")
+        if isinstance(current_result, dict):
+            current_result = DecompositionResult.model_validate(current_result)
+
+        response = {
+            "thread_id": thread_id,
+            "response": current_result.model_dump() if current_result else None,
+            "formatted_output": final_state.get("formatted_output"),
+            "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in final_state.get("stories", [])],
+            "summary": current_result.summary if current_result else None,
+            "story_count": len(final_state.get("stories", [])),
+            "output_format": final_state.get("output_format"),
+            "metadata": {
+                "is_refinement": not initial_state["is_first_message"],
+                "config": {
+                    "story_template": self.config.STORY_TEMPLATE,
+                    "enabled_features": self.config.get_enabled_features(),
+                },
+            },
+        }
+
+        # Add assistant message to conversation
+        if current_result:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": current_result.summary,
+                }
+            )
+
+        return response
+
+    async def export_to_jira(self, thread_id: str) -> dict[str, Any]:
+        """
+        Export the current decomposition to JIRA.
+
+        Requires JIRA configuration and ENABLE_JIRA_EXPORT=True.
+
+        Args:
+            thread_id: Thread ID with existing decomposition
+
+        Returns:
+            Export result with created issue keys
+        """
+        logger.info(f"BacklogAssistantAgent: Exporting to JIRA for thread {thread_id}")
+
+        if not self.config.ENABLE_JIRA_EXPORT:
+            return {
+                "thread_id": thread_id,
+                "error": "JIRA export is not enabled. Set ENABLE_JIRA_EXPORT=True in config.",
+                "export_result": None,
+            }
+
+        # Get current state
+        config = {"configurable": {"thread_id": thread_id}}
+
+        if not self.checkpointer:
+            return {
+                "thread_id": thread_id,
+                "error": "No checkpointer configured. Cannot retrieve decomposition state.",
+                "export_result": None,
+            }
+
+        try:
+            saved_state = await self.graph.aget_state(config)
+            if not saved_state or not saved_state.values:
+                return {
+                    "thread_id": thread_id,
+                    "error": "No decomposition found for this thread.",
+                    "export_result": None,
+                }
+
+            state = saved_state.values
+        except Exception as e:
+            return {
+                "thread_id": thread_id,
+                "error": f"Failed to retrieve state: {e}",
+                "export_result": None,
+            }
+
+        # Run export node
+        export_result = await self.export_node(state)
+
+        return {
+            "thread_id": thread_id,
+            "export_result": export_result.get("export_result"),
+            "error": export_result.get("error"),
+        }
+
+    async def get_stories(self, thread_id: str) -> dict[str, Any]:
+        """
+        Get the current decomposition for a thread.
+
+        Args:
+            thread_id: Thread ID to retrieve
+
+        Returns:
+            Current decomposition result or error
+        """
+        if not self.checkpointer:
+            return {
+                "thread_id": thread_id,
+                "error": "No checkpointer configured",
+                "stories": [],
+            }
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        try:
+            saved_state = await self.graph.aget_state(config)
+            if not saved_state or not saved_state.values:
+                return {
+                    "thread_id": thread_id,
+                    "error": "No decomposition found for this thread",
+                    "stories": [],
+                }
+
+            state = saved_state.values
+            current_result = state.get("current_result")
+
+            if isinstance(current_result, dict):
+                current_result = DecompositionResult.model_validate(current_result)
+
+            return {
+                "thread_id": thread_id,
+                "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in state.get("stories", [])],
+                "result": current_result.model_dump() if current_result else None,
+                "error": None,
+            }
+
+        except Exception as e:
+            return {
+                "thread_id": thread_id,
+                "error": f"Failed to retrieve stories: {e}",
+                "stories": [],
+            }
+
+    def get_config_summary(self) -> dict[str, Any]:
+        """Get a summary of the current agent configuration."""
+        return {
+            "story_template": self.config.STORY_TEMPLATE,
+            "story_template_description": self.config.get_story_template_description(),
+            "output_format": self.config.DEFAULT_OUTPUT_FORMAT,
+            "enabled_features": self.config.get_enabled_features(),
+            "max_stories": self.config.MAX_STORIES_PER_EPIC,
+            "jira_export_enabled": self.config.ENABLE_JIRA_EXPORT,
+            "using_mocks": self.config.USE_MOCKS,
+        }
+
+
+# === CLI Demo Runner ===
+if __name__ == "__main__":
+    import asyncio
+
+    async def demo():
+        """Run a quick demo of the Backlog Assistant Agent."""
+        print("=" * 60)
+        print("Backlog Assistant Agent Demo")
+        print("=" * 60)
+
+        # Create agent with default config (mocks enabled)
+        agent = BacklogAssistantAgent()
+
+        print("\n📋 Agent Configuration:")
+        print(agent.get_config_summary())
+
+        # Test decomposition
+        epic = """
+        Add Single Sign-On (SSO) login support for enterprise customers.
+        We need to support both SAML 2.0 and OIDC protocols.
+        
+        Context: We use Azure AD as our primary IdP. The existing login 
+        system uses JWT tokens. We need to maintain backward compatibility.
+        """
+
+        print("\n🎯 Decomposing Epic:")
+        print(epic.strip())
+        print("\n" + "-" * 40)
+
+        result = await agent.decompose(epic, output_format="json")
+
+        if result.get("error"):
+            print(f"❌ Error: {result['error']}")
+        else:
+            print(f"✅ Generated {result['story_count']} stories")
+            print(f"\n📝 Summary: {result['summary']}")
+            print("\n📖 Stories:")
+            for story in result.get("stories", []):
+                print(f"  - [{story.get('id')}] {story.get('title')}")
+                print(f"    Complexity: {story.get('estimated_complexity', 'N/A')}")
+
+    asyncio.run(demo())

@@ -1,0 +1,63 @@
+"""
+Backlog Agent State
+===================
+TypedDict defining the state that flows through the LangGraph workflow.
+Each node can read and update specific fields of this state.
+"""
+
+from typing import Any, Literal
+
+from typing_extensions import TypedDict
+
+from .schemas import DecompositionResult, Epic, UserStory
+
+
+class BacklogAgentState(TypedDict):
+    """
+    The state object that flows through the Backlog Assistant graph.
+
+    Attributes:
+        messages: Conversation history for multi-turn refinement
+        epic_input: The original epic/feature description from user
+        parsed_epic: Structured epic after parsing
+        stories: List of decomposed user stories
+        current_result: The full decomposition result
+        refinement_feedback: User's feedback for the current turn
+        is_first_message: Whether this is the initial decomposition
+        output_format: Target format (json, markdown, jira)
+        export_result: JIRA export status (if triggered)
+        thread_id: Conversation thread identifier
+        tenant_id: Multi-tenant isolation identifier
+        error: Error message if something failed
+        metadata: Arbitrary metadata for extensibility
+    """
+
+    # Core conversation
+    messages: list[dict[str, Any]]
+    epic_input: str
+    parsed_epic: Epic | None
+
+    # Decomposition output
+    stories: list[UserStory]
+    current_result: DecompositionResult | None
+
+    # Refinement flow
+    refinement_feedback: str | None
+    is_first_message: bool
+
+    # Output configuration
+    output_format: Literal["json", "markdown", "jira"]
+    formatted_output: str | None
+
+    # Export (optional)
+    export_result: dict[str, Any] | None
+
+    # Session management
+    thread_id: str
+    tenant_id: str | None
+
+    # Error handling
+    error: str | None
+
+    # Extensibility
+    metadata: dict[str, Any]
