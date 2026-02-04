@@ -10,8 +10,8 @@ from typing import Any, Dict, List
 from langchain_openai import AzureChatOpenAI
 from pydantic import BaseModel, Field
 
-from src.app.core import config
-from src.app.core.graph_db import GraphDBClient
+from ...core import config
+from ...core.graph_db import GraphDBClient
 
 logger = logging.getLogger(__name__)
 

@@ -504,5 +504,40 @@ class TestIntegration:
         assert "STORY-" in formatted  # Has story IDs
 
 
+
+class TestRefinementFlow:
+    """Test the 'Dumb UI / Smart Agent' refinement flow."""
+
+    @pytest.mark.asyncio
+    async def test_hydration_flow(self):
+        """Test starting the agent with pre-populated stories (Hydration)."""
+        agent = BacklogAssistantAgent()
+
+        # Door B: Start with existing stories
+        existing_stories = [
+            UserStory(
+                id="OLD-01",
+                title="Existing Story",
+                description="This already exists",
+                acceptance_criteria=[],
+            )
+        ]
+
+        # User message for refinement
+        message = "Add a technical note about database migrations"
+
+        result = await agent.chat(
+            thread_id="test-hydration", message=message, initial_stories=existing_stories
+        )
+
+        assert result.get("error") is None
+        assert result.get("metadata", {}).get("is_refinement") is True
+        # Since RefineNode in mock mode (default) returns updated stories
+        assert len(result.get("stories", [])) > 0
+
+        # Verify the RefineNode was hit (in mock mode it adds recommendations/notes)
+        assert result.get("response", {}).get("recommendations") is not None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

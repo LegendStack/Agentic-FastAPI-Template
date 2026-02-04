@@ -3,7 +3,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.core.security_utils import TenantEncryption
+from ..core.security_utils import TenantEncryption
 
 from ..models.agentic import DocumentSection
 from .base import BaseVectorStore

@@ -7,9 +7,9 @@ Combines vector-based retrieval with graph-based relationship traversal.
 import logging
 from typing import Any, Dict, List
 
-from src.app.agents.vector_stores import BaseVectorStore
-from src.app.core import config
-from src.app.core.graph_db import GraphDBClient
+from .vector_stores import BaseVectorStore
+from ..core import config
+from ..core.graph_db import GraphDBClient
 
 logger = logging.getLogger(__name__)
 

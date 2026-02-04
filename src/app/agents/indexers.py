@@ -5,8 +5,8 @@ from typing import Any
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredFileLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from src.app.core.config import settings
-from src.app.core.security_utils import TenantEncryption
+from ..core.config import settings
+from ..core.security_utils import TenantEncryption
 
 from .azure_openai import LLMService
 from .base import BaseIndexer, BaseVectorStore

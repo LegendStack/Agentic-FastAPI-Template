@@ -40,15 +40,15 @@ services:
       - ./src/.env
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    expose:
-      - "5432"
+    ports:
+      - "5432:5432"
 
   redis:
     image: redis:alpine
     volumes:
       - redis-data:/data
-    expose:
-      - "6379"
+    ports:
+      - "6379:6379"
 
   #-------- uncomment to run with nginx --------
   # nginx:

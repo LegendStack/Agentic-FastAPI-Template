@@ -199,6 +199,7 @@ class BacklogAssistantAgent:
         thread_id: str,
         message: str,
         output_format: Literal["json", "markdown", "jira"] | None = None,
+        initial_stories: list[Any] | None = None,
     ) -> dict[str, Any]:
         """
         Process a chat message for decomposition or refinement.
@@ -241,7 +242,7 @@ class BacklogAssistantAgent:
             "messages": messages,
             "epic_input": existing_state.get("epic_input", ""),
             "parsed_epic": existing_state.get("parsed_epic"),
-            "stories": existing_state.get("stories", []),
+            "stories": initial_stories or existing_state.get("stories", []),
             "current_result": existing_state.get("current_result"),
             "refinement_feedback": None,
             "is_first_message": not existing_state.get("stories"),
@@ -288,7 +289,7 @@ class BacklogAssistantAgent:
             "story_count": len(final_state.get("stories", [])),
             "output_format": final_state.get("output_format"),
             "metadata": {
-                "is_refinement": not initial_state["is_first_message"],
+                "is_refinement": not final_state.get("is_first_message", True),
                 "config": {
                     "story_template": self.config.STORY_TEMPLATE,
                     "enabled_features": self.config.get_enabled_features(),

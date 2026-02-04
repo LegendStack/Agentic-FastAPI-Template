@@ -5,12 +5,14 @@ REST API endpoints for the Story Decomposition Agent.
 
 Endpoints:
 - POST /backlog/decompose - Start epic decomposition
+- POST /backlog/refine - Refine existing stories (Door B)
 - POST /backlog/chat/{thread_id} - Conversational refinement
 - GET /backlog/stories/{thread_id} - Get current decomposition
 - POST /backlog/export/{thread_id} - Export to JIRA
 """
 
-from typing import Annotated, Literal
+import uuid
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -73,14 +75,9 @@ class ChatRequest(BaseModel):
         None,
         description="Override output format for this message",
     )
-
-
-class ExportRequest(BaseModel):
-    """Request body for JIRA export."""
-
-    project_key: str | None = Field(
+    stories: list["StoryResponse"] | None = Field(
         None,
-        description="JIRA project key (uses default if not provided)",
+        description="Optional: Inject existing stories (for 'Door B' refinement)",
     )
 
 
@@ -109,6 +106,39 @@ class DecomposeResponse(BaseModel):
     formatted_output: str | None = None
     recommendations: list[str] = []
     error: str | None = None
+
+
+class RefineRequest(BaseModel):
+    """Request body for existing story refinement (Door B)."""
+
+    stories: list[StoryResponse] = Field(
+        ...,
+        description="List of existing stories to refine",
+    )
+    message: str = Field(
+        ...,
+        description="Refinement feedback or instructions",
+        examples=["Convert these stories to BDD format"],
+    )
+    thread_id: str | None = Field(
+        None,
+        description="Optional thread ID if continuing a session",
+    )
+    output_format: Literal["json", "markdown", "jira"] | None = Field(
+        None,
+        description="Override output format",
+    )
+
+
+class ExportRequest(BaseModel):
+    """Request body for JIRA export."""
+
+    project_key: str | None = Field(
+        None,
+        description="JIRA project key (uses default if not provided)",
+    )
+
+
 
 
 class ExportResponse(BaseModel):
@@ -193,14 +223,15 @@ async def refine_decomposition(
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
 ) -> DecomposeResponse:
     """
-    Refine an existing decomposition via conversation.
+    Refine an existing decomposition or start refinement from existing stories.
 
-    Send natural language feedback to update the stories.
+    This unified endpoint supports:
+    1. **Continuation**: Send feedback for stories already in the thread.
+    2. **Hydration (Door B)**: Send a list of `stories` in the first message to initialize refinement.
+
     Examples:
-    - "Add more edge cases"
-    - "Split story 3 into two smaller stories"
-    - "Add a story for error handling"
-    - "Increase complexity estimate for STORY-002"
+    - "Add more edge cases" (Continuation)
+    - "Make these BDD" + [stories] (Hydration)
     """
     agent = get_agent(db)
 
@@ -208,6 +239,7 @@ async def refine_decomposition(
         thread_id=thread_id,
         message=request.message,
         output_format=request.output_format,
+        initial_stories=request.stories,
     )
 
     if result.get("error"):
@@ -254,6 +286,46 @@ async def get_stories(
         result["formatted_output"] = decomp.to_markdown()
 
     return result
+
+
+@router.post("/refine", response_model=DecomposeResponse)
+async def refine_existing_stories(
+    request: RefineRequest,
+    db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+) -> DecomposeResponse:
+    """
+    Refine existing stories based on user feedback.
+
+    Directly injects existing stories into the agent state and
+    processes the feedback message. This is the "Door B" entry point.
+    """
+    agent = get_agent(db)
+
+    thread_id = request.thread_id or str(uuid.uuid4())
+
+    result = await agent.chat(
+        thread_id=thread_id,
+        message=request.message,
+        output_format=request.output_format,
+        initial_stories=request.stories,
+    )
+
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    full_response = result.get("response", {})
+    recommendations = full_response.get("recommendations", []) if full_response else []
+
+    return DecomposeResponse(
+        thread_id=result["thread_id"],
+        story_count=result.get("story_count", 0),
+        summary=result.get("summary"),
+        output_format=result.get("output_format", "json"),
+        stories=result.get("stories", []),
+        formatted_output=result.get("formatted_output"),
+        recommendations=recommendations,
+        error=result.get("error"),
+    )
 
 
 @router.post("/export/{thread_id}", response_model=ExportResponse)

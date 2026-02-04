@@ -10,7 +10,7 @@ import logging
 
 from cryptography.fernet import Fernet
 
-from src.app.core.config import settings
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
