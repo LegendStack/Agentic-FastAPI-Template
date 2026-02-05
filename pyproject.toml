@@ -55,6 +55,7 @@ dependencies = [
     "streamlit>=1.53.1",
     "langchain-redis>=0.2.5",
     "unstructured>=0.18.31",
+    "hvac>=2.1.0",
 ]
 
 [project.optional-dependencies]

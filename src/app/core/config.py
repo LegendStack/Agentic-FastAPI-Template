@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any
 
 from pydantic import SecretStr, computed_field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
 # HACK: Force purge of poisoned environment variables that persist in the session
@@ -348,6 +348,29 @@ class Settings(
         case_sensitive=True,
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        from .vault import VaultSettingsSource
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            VaultSettingsSource(settings_cls), # Vault takes precedence over defaults, but env/init override it? 
+            # Ideally: Init > Env > DotEnv > Vault > Defaults
+            # Or: Init > Env > Vault > DotEnv > Defaults?
+            # User usually wants Vault to provide secrets that are NOT in env.
+            # But if a user EXPLICITLY sets an env var locally, it should probably win for debugging.
+            # So: Init > Env > DotEnv > Vault
+            file_secret_settings,
+        )
 
 
 settings = Settings()
