@@ -3,8 +3,9 @@ Conversation service for managing chat threads and message history.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import sqlalchemy as sa
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -58,9 +59,11 @@ class ConversationService:
         self,
         user_id: int | None = None,
         tenant_id: str | None = None,
+        agent_name: str | None = None,
         status: str = "active",
         limit: int = 20,
         offset: int = 0,
+        days_limit: int | None = None,
     ) -> list[Conversation]:
         """List conversations with optional filtering."""
         query = select(Conversation).where(Conversation.status == status)
@@ -69,6 +72,17 @@ class ConversationService:
             query = query.where(Conversation.user_id == user_id)
         if tenant_id:
             query = query.where(Conversation.tenant_id == tenant_id)
+        if agent_name:
+            query = query.where(Conversation.agent_name == agent_name)
+
+        if days_limit:
+            min_date = datetime.utcnow() - timedelta(days=days_limit)
+            query = query.where(
+                sa.or_(
+                    Conversation.updated_at >= min_date,
+                    Conversation.created_at >= min_date
+                )
+            )
 
         query = query.order_by(Conversation.updated_at.desc()).offset(offset).limit(limit)
         result = await self.db.execute(query)
@@ -83,6 +97,21 @@ class ConversationService:
         )
         await self.db.commit()
         return await self.get_conversation(thread_id)
+
+    async def update_metadata(self, thread_id: str, metadata: dict) -> Conversation | None:
+        """Update conversation metadata."""
+        conv = await self.get_conversation(thread_id)
+        if conv:
+             current_metadata = dict(conv.metadata_json or {})
+             current_metadata.update(metadata)
+             await self.db.execute(
+                 update(Conversation)
+                 .where(Conversation.thread_id == thread_id)
+                 .values(metadata_json=current_metadata, updated_at=datetime.utcnow())
+             )
+             await self.db.commit()
+             return conv
+        return None
 
     async def archive_conversation(self, thread_id: str) -> bool:
         """Archive a conversation (soft delete)."""

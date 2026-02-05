@@ -74,8 +74,9 @@ class MockDecomposeResult:
             stories=stories,
             summary=f"Decomposed '{epic.title}' into {len(stories)} user stories covering setup, core implementation, and testing.",
             recommendations=[
-                "Consider adding documentation story",
-                "Plan for incremental delivery",
+                "Add BDD scenarios to all stories",
+                "Split STORY-002 into frontend/backend tasks",
+                "Save to JIRA",
             ],
             total_estimated_effort="M-L (approximately 2-3 sprints)",
         )
@@ -155,6 +156,7 @@ class DecomposeNode:
         system_prompt = get_decompose_system_prompt(
             story_template=self.config.STORY_TEMPLATE,
             ac_style=self.config.AC_STYLE,
+            project_key=epic.project_key,
         )
 
         user_prompt = get_decompose_user_prompt(

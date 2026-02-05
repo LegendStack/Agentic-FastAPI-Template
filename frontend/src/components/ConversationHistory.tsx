@@ -1,0 +1,252 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MessageSquare, Plus, Pencil, Trash2, Check, X } from 'lucide-react';
+import api from '../api/client';
+import { useState } from 'react';
+
+interface Conversation {
+    id: number;
+    thread_id: string;
+    title: string | null;
+    agent_name: string;
+    status: string;
+    metadata: {
+        project_key?: string;
+    } | null;
+    created_at: string;
+    updated_at: string | null;
+}
+
+interface GroupedConversations {
+    [key: string]: Conversation[];
+}
+
+interface ConversationHistoryProps {
+    onSelectThread: (threadId: string) => void;
+    onNewConversation: () => void;
+    currentThreadId?: string;
+}
+
+const formatRelativeTime = (dateString: string): string => {
+    // Force UTC if no timezone is present
+    const normalizedDate = dateString.endsWith('Z') || dateString.includes('+')
+        ? dateString
+        : `${dateString}Z`;
+
+    const date = new Date(normalizedDate);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+
+    // Handle potential clock skew or future dates
+    if (diffMs < 0) return 'Just now';
+
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+};
+
+const getGroupName = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+
+    // Reset times to compare dates only
+    const dDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const diffDays = Math.floor((dNow.getTime() - dDate.getTime()) / 86400000);
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return 'This Week';
+    if (diffDays < 30) return 'This Month';
+    return 'Older';
+};
+
+export const ConversationHistory = ({
+    onSelectThread,
+    onNewConversation,
+    currentThreadId,
+}: ConversationHistoryProps) => {
+    const queryClient = useQueryClient();
+    const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+
+    const { data, isLoading } = useQuery({
+        queryKey: ['conversations', 'backlog_assistant'],
+        queryFn: async () => {
+            const response = await api.get('/agents/conversations', {
+                params: { agent_name: 'backlog_assistant', limit: 50 },
+            });
+            return response.data.conversations as Conversation[];
+        },
+        refetchInterval: 30000,
+    });
+
+    const renameMutation = useMutation({
+        mutationFn: async ({ threadId, title }: { threadId: string, title: string }) => {
+            await api.patch(`/agents/conversations/${threadId}`, { title });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            setEditingThreadId(null);
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (threadId: string) => {
+            await api.delete(`/agents/conversations/${threadId}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        }
+    });
+
+    const handleStartEdit = (e: React.MouseEvent, conv: Conversation) => {
+        e.stopPropagation();
+        setEditingThreadId(conv.thread_id);
+        setEditTitle(conv.title || 'Untitled Chat');
+    };
+
+    const handleSaveEdit = (e: React.MouseEvent, threadId: string) => {
+        e.stopPropagation();
+        if (editTitle.trim()) {
+            renameMutation.mutate({ threadId, title: editTitle.trim() });
+        } else {
+            setEditingThreadId(null);
+        }
+    };
+
+    const handleDelete = (e: React.MouseEvent, threadId: string) => {
+        e.stopPropagation();
+        if (window.confirm('Are you sure you want to delete this conversation?')) {
+            deleteMutation.mutate(threadId);
+        }
+    };
+
+    const groupedData = data?.reduce((acc: GroupedConversations, conv) => {
+        const group = getGroupName(conv.updated_at || conv.created_at);
+        if (!acc[group]) acc[group] = [];
+        acc[group].push(conv);
+        return acc;
+    }, {});
+
+    const groupOrder = ['Today', 'Yesterday', 'This Week', 'This Month', 'Older'];
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="px-4 py-3 border-b border-slate-700/50">
+                <button
+                    onClick={onNewConversation}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-blue/10 hover:bg-brand-blue/20 border border-brand-blue/30 rounded-xl transition-all text-brand-blue font-semibold text-sm"
+                >
+                    <Plus className="w-4 h-4" />
+                    New Chat
+                </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 py-3 custom-scrollbar">
+                {isLoading ? (
+                    <div className="px-4 py-8 text-center text-slate-500 text-sm">
+                        Loading history...
+                    </div>
+                ) : data && data.length > 0 ? (
+                    <AnimatePresence>
+                        {groupOrder.map(group => {
+                            const conversations = groupedData?.[group];
+                            if (!conversations || conversations.length === 0) return null;
+
+                            return (
+                                <div key={group} className="mb-6 last:mb-2">
+                                    <h4 className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                        {group}
+                                    </h4>
+                                    {conversations.map((conv) => (
+                                        <motion.div
+                                            key={conv.thread_id}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -10 }}
+                                            onClick={() => onSelectThread(conv.thread_id)}
+                                            className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg transition-all text-left mb-1 group/item cursor-pointer ${currentThreadId === conv.thread_id
+                                                ? 'bg-brand-blue/10 border border-brand-blue/30'
+                                                : 'hover:bg-slate-800/50 border border-transparent'
+                                                }`}
+                                        >
+                                            <MessageSquare className={`w-4 h-4 mt-0.5 flex-shrink-0 ${currentThreadId === conv.thread_id
+                                                ? 'text-brand-blue'
+                                                : 'text-slate-500'
+                                                }`} />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-2 overflow-hidden">
+                                                    {editingThreadId === conv.thread_id ? (
+                                                        <div className="flex-1 flex items-center gap-1 min-w-0" onClick={e => e.stopPropagation()}>
+                                                            <input
+                                                                autoFocus
+                                                                type="text"
+                                                                value={editTitle}
+                                                                onChange={e => setEditTitle(e.target.value)}
+                                                                onKeyDown={e => e.key === 'Enter' && handleSaveEdit(e as any, conv.thread_id)}
+                                                                className="flex-1 bg-slate-900 border border-brand-blue/50 rounded px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-blue"
+                                                            />
+                                                            <button onClick={e => handleSaveEdit(e, conv.thread_id)} className="p-1 hover:text-brand-blue text-slate-400">
+                                                                <Check className="w-3 h-3" />
+                                                            </button>
+                                                            <button onClick={e => { e.stopPropagation(); setEditingThreadId(null); }} className="p-1 hover:text-red-400 text-slate-400">
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <p className={`text-sm font-medium truncate ${currentThreadId === conv.thread_id
+                                                                ? 'text-brand-blue'
+                                                                : 'text-slate-300'
+                                                                }`}>
+                                                                {conv.title || 'Untitled Chat'}
+                                                            </p>
+                                                            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                <button
+                                                                    onClick={(e) => handleStartEdit(e, conv)}
+                                                                    className="p-1 hover:text-brand-blue text-slate-500 transition-colors"
+                                                                >
+                                                                    <Pencil className="w-3 h-3" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => handleDelete(e, conv.thread_id)}
+                                                                    className="p-1 hover:text-red-400 text-slate-500 transition-colors"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    {conv.metadata?.project_key && !editingThreadId && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono border border-slate-700 flex-shrink-0">
+                                                            {conv.metadata.project_key}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                                    {formatRelativeTime(conv.updated_at || conv.created_at)}
+                                                </p>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            );
+                        })}
+                    </AnimatePresence>
+                ) : (
+                    <div className="px-4 py-8 text-center text-slate-500 text-sm">
+                        No recent chats found.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};

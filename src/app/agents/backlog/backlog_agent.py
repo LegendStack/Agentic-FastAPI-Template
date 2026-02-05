@@ -101,7 +101,7 @@ class BacklogAssistantAgent:
         self.decompose_node = DecomposeNode(config=self.config)
         self.refine_node = RefineNode(config=self.config)
         self.format_node = FormatNode(config=self.config)
-        self.export_node = ExportNode(config=self.config)
+        self.save_node = ExportNode(config=self.config)
 
     def _build_graph(self) -> StateGraph:
         """
@@ -122,7 +122,7 @@ class BacklogAssistantAgent:
         workflow.add_node("decompose", self.decompose_node)
         workflow.add_node("refine", self.refine_node)
         workflow.add_node("format", self.format_node)
-        workflow.add_node("export", self.export_node)
+        workflow.add_node("save_to_jira", self.save_node)
 
         # Define edges
         workflow.add_edge(START, "input")
@@ -134,6 +134,7 @@ class BacklogAssistantAgent:
             {
                 "decompose": "decompose",
                 "refine": "refine",
+                "save_to_jira": "save_to_jira",
                 "error": END,
             },
         )
@@ -141,21 +142,28 @@ class BacklogAssistantAgent:
         # Both decompose and refine go to format
         workflow.add_edge("decompose", "format")
         workflow.add_edge("refine", "format")
+        workflow.add_edge("save_to_jira", "format")
 
-        # Format goes to end (export is triggered separately)
+        # Format goes to end
         workflow.add_edge("format", END)
-
-        # Export also goes to end
-        workflow.add_edge("export", END)
 
         return workflow.compile(checkpointer=self.checkpointer)
 
     def _route_after_input(self, state: BacklogAgentState) -> str:
         """Route based on whether this is a new decomposition or refinement."""
+        is_save = state.get("is_save_requested")
+        is_first = state.get("is_first_message")
+        has_stories = bool(state.get("stories"))
+        
+        logger.info(f"BacklogAgent: Routing - save_req={is_save}, first={is_first}, has_stories={has_stories}")
+
         if state.get("error"):
             return "error"
 
-        if state.get("is_first_message", True) or not state.get("stories"):
+        if is_save:
+            return "save_to_jira"
+
+        if is_first or not has_stories:
             return "decompose"
 
         return "refine"
@@ -166,6 +174,7 @@ class BacklogAssistantAgent:
         context: str | None = None,
         output_format: Literal["json", "markdown", "jira"] = "json",
         thread_id: str | None = None,
+        project_key: str | None = None,
     ) -> dict[str, Any]:
         """
         Decompose an epic into user stories.
@@ -192,6 +201,7 @@ class BacklogAssistantAgent:
             thread_id=thread_id,
             message=full_input,
             output_format=output_format,
+            project_key=project_key,
         )
 
     async def chat(
@@ -200,6 +210,7 @@ class BacklogAssistantAgent:
         message: str,
         output_format: Literal["json", "markdown", "jira"] | None = None,
         initial_stories: list[Any] | None = None,
+        project_key: str | None = None,
     ) -> dict[str, Any]:
         """
         Process a chat message for decomposition or refinement.
@@ -226,6 +237,7 @@ class BacklogAssistantAgent:
 
         # Get existing state if any
         existing_state = {}
+
         if self.checkpointer:
             try:
                 saved_state = await self.graph.aget_state(config)
@@ -246,6 +258,7 @@ class BacklogAssistantAgent:
             "current_result": existing_state.get("current_result"),
             "refinement_feedback": None,
             "is_first_message": not existing_state.get("stories"),
+            "is_save_requested": False,
             "output_format": output_format or existing_state.get("output_format", self.config.DEFAULT_OUTPUT_FORMAT),
             "formatted_output": None,
             "export_result": None,
@@ -254,6 +267,34 @@ class BacklogAssistantAgent:
             "error": None,
             "metadata": existing_state.get("metadata", {}),
         }
+
+        if self.checkpointer:
+            # Sync with ConversationService for history tracking
+            # We do this asynchronously to avoid blocking the main flow if possible, 
+            # but here we'll await it to ensure consistency.
+            if hasattr(self.checkpointer, "db"):
+                from ..conversations import ConversationService
+                conversation_service = ConversationService(self.checkpointer.db)
+                
+                # Ensure conversation exists
+                existing_conv = await conversation_service.get_conversation(thread_id)
+                if not existing_conv:
+                    await conversation_service.create_conversation(
+                        thread_id=thread_id,
+                        agent_name="backlog_assistant",
+                        title=existing_state.get("epic_input", "New Epic")[:50] + "..." if existing_state.get("epic_input") else "New Conversation"
+                    )
+                
+                # Store project_key in metadata if provided
+                if project_key:
+                    await conversation_service.update_metadata(thread_id, {"project_key": project_key})
+                
+                # Add user message
+                await conversation_service.add_message(
+                    thread_id=thread_id,
+                    role="user",
+                    content=message
+                )
 
         # Run the graph
         final_state = None
@@ -298,19 +339,25 @@ class BacklogAssistantAgent:
         }
 
         # Add assistant message to conversation
-        if current_result:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": current_result.summary,
-                }
+        if current_result and self.checkpointer and hasattr(self.checkpointer, "db"):
+            from ..conversations import ConversationService
+            conversation_service = ConversationService(self.checkpointer.db)
+            await conversation_service.add_message(
+                thread_id=thread_id,
+                role="assistant",
+                content=current_result.summary
             )
+            
+            # Update title based on result summary if it's the first message
+            if not existing_state.get("stories"):
+                 summary_title = current_result.summary.split('\n')[0][:50]
+                 await conversation_service.update_conversation_title(thread_id, summary_title)
 
         return response
 
-    async def export_to_jira(self, thread_id: str) -> dict[str, Any]:
+    async def save_to_jira(self, thread_id: str) -> dict[str, Any]:
         """
-        Export the current decomposition to JIRA.
+        Save the current decomposition to JIRA.
 
         Requires JIRA configuration and ENABLE_JIRA_EXPORT=True.
 
@@ -318,14 +365,14 @@ class BacklogAssistantAgent:
             thread_id: Thread ID with existing decomposition
 
         Returns:
-            Export result with created issue keys
+            Save result with created issue keys
         """
-        logger.info(f"BacklogAssistantAgent: Exporting to JIRA for thread {thread_id}")
+        logger.info(f"BacklogAssistantAgent: Saving to JIRA for thread {thread_id}")
 
         if not self.config.ENABLE_JIRA_EXPORT:
             return {
                 "thread_id": thread_id,
-                "error": "JIRA export is not enabled. Set ENABLE_JIRA_EXPORT=True in config.",
+                "error": "JIRA integration is not enabled. Set ENABLE_JIRA_EXPORT=True in config.",
                 "export_result": None,
             }
 
@@ -356,13 +403,13 @@ class BacklogAssistantAgent:
                 "export_result": None,
             }
 
-        # Run export node
-        export_result = await self.export_node(state)
+        # Run save node
+        save_result = await self.save_node(state)
 
         return {
             "thread_id": thread_id,
-            "export_result": export_result.get("export_result"),
-            "error": export_result.get("error"),
+            "export_result": save_result.get("export_result"),
+            "error": save_result.get("error"),
         }
 
     async def get_stories(self, thread_id: str) -> dict[str, Any]:
@@ -399,11 +446,20 @@ class BacklogAssistantAgent:
             if isinstance(current_result, dict):
                 current_result = DecompositionResult.model_validate(current_result)
 
+            # Get metadata from ConversationService if available
+            metadata = {}
+            if hasattr(self.checkpointer, "db"):
+                from ..conversations import ConversationService
+                conversation_service = ConversationService(self.checkpointer.db)
+                conv = await conversation_service.get_conversation(thread_id)
+                if conv:
+                    metadata = conv.metadata_json or {}
+
             return {
                 "thread_id": thread_id,
                 "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in state.get("stories", [])],
                 "result": current_result.model_dump() if current_result else None,
-                "error": None,
+                "metadata": metadata,
             }
 
         except Exception as e:

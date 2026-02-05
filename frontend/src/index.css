@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-navy: #0a192f;
+  --color-brand-slate: #112240;
+  --color-brand-blue: #64ffda;
+  --color-brand-neon: #3beadc;
+}
+
+:root {
+  --font-inter: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+  background-color: #0a192f;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-inter);
+  color: #ccd6f6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism Utilities */
+.glass {
+  background: rgba(17, 34, 64, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-card {
+  /* Avoiding @apply for custom utility to be safe in V4 */
+  background: rgba(17, 34, 64, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  /* rounded-xl */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  /* shadow-2xl */
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+.glass-card:hover {
+  border-color: rgba(100, 255, 218, 0.4);
+  transform: translateY(-4px);
+}
+
+/* Neon Glows */
+.neon-text {
+  color: #64ffda;
+  text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
+}
+
+.glow-border {
+  box-shadow: 0 0 15px rgba(100, 255, 218, 0.1);
+}
+
+/* Animations */
+@keyframes pulse-slow {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

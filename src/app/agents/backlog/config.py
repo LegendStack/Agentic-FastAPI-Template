@@ -50,7 +50,7 @@ class BacklogAgentConfig:
     MAX_AC_PER_STORY: int = 6
 
     # === JIRA Integration ===
-    ENABLE_JIRA_EXPORT: bool = False  # Enable JIRA issue creation
+    ENABLE_JIRA_EXPORT: bool = True  # Enable JIRA issue creation
     JIRA_PROJECT_KEY: str | None = None  # Default project for exports
     JIRA_ISSUE_TYPE: str = "Story"  # Issue type for created stories
     JIRA_EPIC_LINK_FIELD: str = "customfield_10014"  # Epic link custom field

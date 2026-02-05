@@ -205,15 +205,24 @@ async def create_conversation(
 
 @router.get("/agents/conversations")
 async def list_conversations(
+    agent_name: str | None = None,
     tenant_id: str | None = None,
     status: str = "active",
-    limit: int = 20,
+    limit: int = 50,
     offset: int = 0,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
 ):
     """List conversations with optional filtering."""
     service = ConversationService(db)
-    conversations = await service.list_conversations(tenant_id=tenant_id, status=status, limit=limit, offset=offset)
+    # Default to 30 days limit as requested
+    conversations = await service.list_conversations(
+        agent_name=agent_name,
+        tenant_id=tenant_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+        days_limit=30,
+    )
     return {
         "conversations": [
             {
@@ -222,6 +231,7 @@ async def list_conversations(
                 "title": c.title,
                 "agent_name": c.agent_name,
                 "status": c.status,
+                "metadata": c.metadata_json,
                 "created_at": c.created_at.isoformat(),
                 "updated_at": c.updated_at.isoformat() if c.updated_at else None,
             }

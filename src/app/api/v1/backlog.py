@@ -18,7 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...agents.backlog import BacklogAgentConfig, BacklogAssistantAgent
+from ...agents.backlog import BacklogAgentConfig
+from ...agents.backlog.schemas import UserStory
 from ...agents.persistence import SqlAlchemyCheckpointSaver
 from ...core.db.database import async_get_db
 
@@ -75,24 +76,13 @@ class ChatRequest(BaseModel):
         None,
         description="Override output format for this message",
     )
-    stories: list["StoryResponse"] | None = Field(
+    stories: list[UserStory] | None = Field(
         None,
         description="Optional: Inject existing stories (for 'Door B' refinement)",
     )
 
 
-class StoryResponse(BaseModel):
-    """Response model for a single user story."""
-
-    id: str
-    title: str
-    description: str
-    acceptance_criteria: list[dict]
-    edge_cases: list[str] = []
-    technical_notes: list[str] = []
-    dependencies: list[str] = []
-    estimated_complexity: str | None = None
-    tags: list[str] = []
+# StoryResponse is now unified with UserStory for strict type symmetry
 
 
 class DecomposeResponse(BaseModel):
@@ -102,7 +92,7 @@ class DecomposeResponse(BaseModel):
     story_count: int
     summary: str | None
     output_format: str
-    stories: list[StoryResponse]
+    stories: list[UserStory]
     formatted_output: str | None = None
     recommendations: list[str] = []
     error: str | None = None
@@ -111,7 +101,7 @@ class DecomposeResponse(BaseModel):
 class RefineRequest(BaseModel):
     """Request body for existing story refinement (Door B)."""
 
-    stories: list[StoryResponse] = Field(
+    stories: list[UserStory] = Field(
         ...,
         description="List of existing stories to refine",
     )
@@ -158,8 +148,10 @@ class ExportResponse(BaseModel):
 def get_agent(
     db: AsyncSession,
     config: BacklogAgentConfig | None = None,
-) -> BacklogAssistantAgent:
+) -> Any:
     """Create a BacklogAssistantAgent with database persistence."""
+    from ...agents.backlog import BacklogAssistantAgent
+
     checkpointer = SqlAlchemyCheckpointSaver(db)
     return BacklogAssistantAgent(config=config, checkpointer=checkpointer)
 
@@ -170,6 +162,7 @@ def get_agent(
 @router.post("/decompose", response_model=DecomposeResponse)
 async def decompose_epic(
     request: DecomposeRequest,
+    project_key: str | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
 ) -> DecomposeResponse:
     """
@@ -195,6 +188,7 @@ async def decompose_epic(
         epic_description=request.epic_description,
         context=request.context,
         output_format=request.output_format,
+        project_key=project_key,
     )
 
     if result.get("error"):
@@ -220,6 +214,7 @@ async def decompose_epic(
 async def refine_decomposition(
     thread_id: str,
     request: ChatRequest,
+    project_key: str | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
 ) -> DecomposeResponse:
     """
@@ -240,6 +235,7 @@ async def refine_decomposition(
         message=request.message,
         output_format=request.output_format,
         initial_stories=request.stories,
+        project_key=project_key,
     )
 
     if result.get("error"):
@@ -291,6 +287,7 @@ async def get_stories(
 @router.post("/refine", response_model=DecomposeResponse)
 async def refine_existing_stories(
     request: RefineRequest,
+    project_key: str | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
 ) -> DecomposeResponse:
     """
@@ -308,6 +305,7 @@ async def refine_existing_stories(
         message=request.message,
         output_format=request.output_format,
         initial_stories=request.stories,
+        project_key=project_key,
     )
 
     if result.get("error"):
@@ -374,5 +372,7 @@ async def get_agent_config() -> dict:
 
     Useful for understanding available options and current defaults.
     """
+    from ...agents.backlog import BacklogAssistantAgent
+    
     agent = BacklogAssistantAgent()
     return agent.get_config_summary()

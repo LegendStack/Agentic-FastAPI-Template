@@ -128,7 +128,7 @@ class ExportNode:
         """Create issues in JIRA."""
         base_url = settings.JIRA_URL
         auth = (settings.JIRA_USERNAME, settings.JIRA_API_TOKEN.get_secret_value())
-        project_key = self.config.JIRA_PROJECT_KEY or "PROJ"
+        project_key = (result.epic.project_key if result.epic else None) or self.config.JIRA_PROJECT_KEY or "PROJ"
 
         created_issues = []
         errors = []

@@ -60,6 +60,8 @@ class InputNode:
         if not user_message:
             return {"error": "No user message found"}
 
+        logger.info(f"InputNode: User message: '{user_message[:100]}...'")
+
         # Validate input length
         if len(user_message) < self.MIN_INPUT_LENGTH:
             return {
@@ -106,11 +108,23 @@ class InputNode:
                 "error": None,
             }
 
+        is_save_requested = self._is_save_intent(user_message)
+
+        if is_save_requested and existing_stories:
+            logger.info("InputNode: Detected save intent for existing stories")
+            return {
+                "refinement_feedback": None,
+                "is_save_requested": True,
+                "is_first_message": False,
+                "error": None,
+            }
+
         if existing_stories and not is_first_message:
             # This is a refinement request
             logger.info("InputNode: Detected refinement request")
             return {
                 "refinement_feedback": user_message,
+                "is_save_requested": False,
                 "is_first_message": False,
                 "error": None,
             }
@@ -124,10 +138,27 @@ class InputNode:
             "parsed_epic": parsed_epic,
             "is_first_message": True,
             "refinement_feedback": None,
+            "is_save_requested": False,
             "error": None,
         }
 
-    def _parse_epic(self, input_text: str) -> Epic:
+    def _is_save_intent(self, text: str) -> bool:
+        """Detect if the user wants to save/export to JIRA."""
+        keywords = [
+            r"save",
+            r"push",
+            r"export",
+            r"create issues",
+            r"sync",
+            r"finalize",
+            r"looks good",
+            r"perfect",
+            r"send to jira",
+        ]
+        text_lower = text.lower()
+        return any(re.search(kw, text_lower) for kw in keywords)
+
+    def _parse_epic(self, input_text: str, project_key: str | None = None) -> Epic:
         """
         Parse epic from user input.
 
@@ -146,6 +177,7 @@ class InputNode:
             title=title,
             description=description,
             context=context,
+            project_key=project_key,
         )
 
     def _extract_title(self, text: str) -> str:

@@ -5,9 +5,9 @@ Pydantic models for structured LLM output with validation.
 These models ensure decomposition results are well-formed and consistent.
 """
 
-from typing import Literal
+from typing import Literal, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AcceptanceCriteria(BaseModel):
@@ -34,6 +34,13 @@ class AcceptanceCriteria(BaseModel):
     when: str | None = Field(None, description="BDD: Action or trigger")
     then: str | None = Field(None, description="BDD: Expected outcome")
     is_edge_case: bool = Field(False, description="Whether this is an edge case scenario")
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_flexible(cls, data: Any) -> Any:
+        if isinstance(data, str):
+            return {"description": data}
+        return data
 
     def to_bdd_string(self) -> str:
         """Format as BDD string if Given/When/Then are provided."""
@@ -91,6 +98,15 @@ class UserStory(BaseModel):
         None,
         description="T-shirt size complexity estimate",
     )
+    @model_validator(mode="before")
+    @classmethod
+    def validate_complexity(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            comp = data.get("estimated_complexity")
+            if comp and comp not in ["XS", "S", "M", "L", "XL"]:
+                data["estimated_complexity"] = None
+        return data
+
     tags: list[str] = Field(
         default_factory=list,
         description="Labels for categorization (e.g., 'frontend', 'security')",
@@ -184,6 +200,10 @@ class Epic(BaseModel):
     context: str | None = Field(
         None,
         description="Additional context (tech stack, constraints, etc.)",
+    )
+    project_key: str | None = Field(
+        None,
+        description="The JIRA project key associated with this epic",
     )
     business_value: str | None = Field(
         None,

@@ -186,7 +186,8 @@ class RefineNode:
 
         # Build prompts
         current_json = current_result.model_dump_json(indent=2)
-        system_prompt = get_refine_system_prompt(current_json)
+        project_key = current_result.epic.project_key if current_result.epic else None
+        system_prompt = get_refine_system_prompt(current_json, project_key=project_key)
         user_prompt = get_refine_user_prompt(feedback)
 
         # Use structured output validator with retry

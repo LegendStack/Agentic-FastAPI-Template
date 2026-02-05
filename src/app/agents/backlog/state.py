@@ -44,9 +44,10 @@ class BacklogAgentState(TypedDict):
     # Refinement flow
     refinement_feedback: str | None
     is_first_message: bool
+    is_save_requested: bool | None
 
     # Output configuration
-    output_format: Literal["json", "markdown", "jira"]
+    output_format: str
     formatted_output: str | None
 
     # Export (optional)

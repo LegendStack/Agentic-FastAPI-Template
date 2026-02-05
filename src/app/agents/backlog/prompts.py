@@ -10,7 +10,7 @@ from ..prompts import PromptRegistry
 # === System Prompts ===
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert Agile Product Owner and Business Analyst.
-Your role is to decompose high-level epics and features into well-structured user stories.
+Your role is to decompose high-level epics and features into well-structured user stories for the project: {project_context}.
 
 ## Your Expertise
 - Breaking down complex requirements into atomic, deliverable stories
@@ -32,12 +32,13 @@ Your role is to decompose high-level epics and features into well-structured use
 4. Add technical notes only when they provide essential context
 5. Identify dependencies between stories using their IDs
 6. Assign complexity based on implementation effort, not business value
+7. Provide 2-3 "Proactive Next Actions" in the recommendations field (e.g., "Add BDD scenarios", "Split STORY-002", "Save to JIRA").
 
 ## Output Format
 Respond with valid JSON matching the DecompositionResult schema.
 Do not include any text outside the JSON object."""
 
-REFINE_SYSTEM_PROMPT = """You are an expert Agile Product Owner refining user stories based on feedback.
+REFINE_SYSTEM_PROMPT = """You are an expert Agile Product Owner refining user stories based on feedback for the project: {project_context}.
 You have previously decomposed an epic into user stories. The user is now providing feedback.
 
 ## Current Decomposition
@@ -55,6 +56,7 @@ Based on the user's feedback, update the decomposition:
 2. Use new sequential IDs for newly added stories
 3. Keep all unchanged stories in your response
 4. Preserve the overall structure and quality of the decomposition
+5. Include 2-3 specific follow-up suggestions in the recommendations based on the current state.
 
 ## Output Format
 Respond with the updated DecompositionResult as valid JSON.
@@ -125,9 +127,12 @@ Respond with the complete updated DecompositionResult."""
 def get_decompose_system_prompt(
     story_template: str = "standard",
     ac_style: str = "bullet",
+    project_key: str | None = None,
 ) -> str:
     """Build the decomposition system prompt with configured templates."""
+    project_context = f"Project {project_key}" if project_key else "General Project"
     return DECOMPOSE_SYSTEM_PROMPT.format(
+        project_context=project_context,
         story_template_instructions=STORY_TEMPLATE_INSTRUCTIONS.get(
             story_template, STORY_TEMPLATE_INSTRUCTIONS["standard"]
         ),
@@ -169,9 +174,13 @@ def get_decompose_user_prompt(
     )
 
 
-def get_refine_system_prompt(current_decomposition: str) -> str:
-    """Build the refinement system prompt with current state."""
-    return REFINE_SYSTEM_PROMPT.format(current_decomposition=current_decomposition)
+def get_refine_system_prompt(current_decomposition: str, project_key: str | None = None) -> str:
+    """Build the refinement system prompt with current state and project context."""
+    project_context = f"Project {project_key}" if project_key else "General Project"
+    return REFINE_SYSTEM_PROMPT.format(
+        current_decomposition=current_decomposition,
+        project_context=project_context
+    )
 
 
 def get_refine_user_prompt(feedback: str) -> str:

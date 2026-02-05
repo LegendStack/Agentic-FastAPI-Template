@@ -47,7 +47,11 @@ class FormatNode:
 
         current_result = state.get("current_result")
         if not current_result:
-            return {"error": "No decomposition result to format"}
+            return {
+                "error": "No decomposition result to format",
+                "is_first_message": not state.get("stories"), # Assuming 'stories' indicates existing state
+                "is_export_requested": False,
+            }
 
         # Convert from dict if needed
         if isinstance(current_result, dict):
@@ -65,6 +69,11 @@ class FormatNode:
 
             logger.info(f"FormatNode: Formatted as {output_format}")
 
+            # Add export result to formatted output if exists
+            export_result = state.get("export_result")
+            if export_result:
+                formatted = self._append_export_confirmation(formatted, export_result)
+
             return {
                 "formatted_output": formatted,
                 "error": None,
@@ -73,6 +82,23 @@ class FormatNode:
         except Exception as e:
             logger.error(f"FormatNode: Error - {e}")
             return {"error": f"Formatting failed: {str(e)}"}
+
+    def _append_export_confirmation(self, formatted: str, export_result: dict[str, Any]) -> str:
+        """Append JIRA save confirmation to the output."""
+        status = export_result.get("status", "unknown")
+        message = export_result.get("message", "")
+        issues = export_result.get("issues", [])
+
+        confirmation = f"\n\n---\n### 🚀 JIRA SAVE: {status.upper()}\n{message}\n\n"
+        
+        if issues:
+            confirmation += "Created Issues:\n"
+            for issue in issues:
+                key = issue.get("jira_key", "N/A")
+                url = issue.get("url", "#")
+                confirmation += f"- **[{key}]({url})**\n"
+        
+        return formatted + confirmation
 
     def _format_json(self, result: DecompositionResult) -> str:
         """Format as pretty-printed JSON."""
