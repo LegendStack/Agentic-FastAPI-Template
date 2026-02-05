@@ -5,6 +5,7 @@ Unit tests for the Story Decomposition Agent.
 """
 
 import pytest
+from unittest.mock import patch
 
 from src.app.agents.backlog import (
     BacklogAgentConfig,
@@ -138,10 +139,13 @@ class TestConfig:
 
     def test_default_config(self):
         """Test default configuration values."""
-        config = BacklogAgentConfig()
-        assert config.USE_MOCKS is True
-        assert config.STORY_TEMPLATE == "standard"
-        assert config.MAX_STORIES_PER_EPIC == 10
+        # Patch the settings used by the dataclass field default factory
+        with patch("src.app.agents.backlog.config.settings") as mock_settings:
+            mock_settings.BACKLOG_USE_MOCKS = True
+            config = BacklogAgentConfig()
+            assert config.USE_MOCKS is True
+            assert config.STORY_TEMPLATE == "standard"
+            assert config.MAX_STORIES_PER_EPIC == 10
 
     def test_custom_config(self):
         """Test custom configuration."""
@@ -455,17 +459,19 @@ class TestBacklogAssistantAgent:
     @pytest.mark.asyncio
     async def test_get_config_summary(self):
         """Test configuration summary."""
-        config = BacklogAgentConfig(
-            STORY_TEMPLATE="bdd",
-            ENABLE_EDGE_CASES=True,
-        )
-        agent = BacklogAssistantAgent(config=config)
+        with patch("src.app.agents.backlog.config.settings") as mock_settings:
+            mock_settings.BACKLOG_USE_MOCKS = True
+            config = BacklogAgentConfig(
+                STORY_TEMPLATE="bdd",
+                ENABLE_EDGE_CASES=True,
+            )
+            agent = BacklogAssistantAgent(config=config)
 
-        summary = agent.get_config_summary()
+            summary = agent.get_config_summary()
 
-        assert summary["story_template"] == "bdd"
-        assert "edge_cases" in summary["enabled_features"]
-        assert summary["using_mocks"] is True
+            assert summary["story_template"] == "bdd"
+            assert "edge_cases" in summary["enabled_features"]
+            assert summary["using_mocks"] is True
 
     @pytest.mark.asyncio
     async def test_decompose_with_context(self):

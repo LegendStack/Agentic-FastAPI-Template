@@ -74,10 +74,22 @@ class FormatNode:
             if export_result:
                 formatted = self._append_export_confirmation(formatted, export_result)
 
-            # Add assistant message to history (Phase 24 Proper Fix)
+            # Add assistant message to history (Ensure JIRA links are included if recently exported)
             messages = state.get("messages", [])
             if current_result and current_result.summary:
-                messages = messages + [{"role": "assistant", "content": current_result.summary}]
+                assistant_content = current_result.summary
+                
+                # If we just performed an export, the summary might be empty or generic.
+                # FormatNode appends export details to formatted_output; we should also add to message.
+                if export_result:
+                    assistant_content += f"\n\n{export_result.get('message', '')}"
+                    issues = export_result.get("issues", [])
+                    if issues:
+                        assistant_content += "\n\n**Created JIRA Issues:**\n"
+                        for issue in issues:
+                            assistant_content += f"- [{issue.get('jira_key')}]({issue.get('url')})\n"
+
+                messages = messages + [{"role": "assistant", "content": assistant_content}]
 
             return {
                 "formatted_output": formatted,

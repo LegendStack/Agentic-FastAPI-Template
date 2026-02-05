@@ -26,6 +26,7 @@ class BacklogAgentState(BaseAgentState):
         refinement_feedback: User's feedback for the current turn
         is_first_message: Whether this is the initial decomposition
         output_format: Target format (json, markdown, jira)
+        story_template: Preferred story template (standard, bdd, minimal)
         export_result: JIRA export status (if triggered)
         thread_id: Conversation thread identifier
         tenant_id: Multi-tenant isolation identifier
@@ -53,6 +54,7 @@ class BacklogAgentState(BaseAgentState):
 
     # Output configuration
     output_format: str
+    story_template: str
     formatted_output: str | None
 
     # Export (optional)

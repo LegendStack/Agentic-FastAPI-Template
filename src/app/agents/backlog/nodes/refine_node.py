@@ -188,8 +188,13 @@ class RefineNode:
         current_json = current_result.model_dump_json(indent=2)
         project_key = current_result.epic.project_key if current_result.epic else None
         edit_context = state.get("edit_context")
+        story_template = state.get("story_template", self.config.STORY_TEMPLATE)
         
-        system_prompt = get_refine_system_prompt(current_json, project_key=project_key)
+        system_prompt = get_refine_system_prompt(
+            current_json, 
+            story_template=story_template,
+            project_key=project_key
+        )
         user_prompt = get_refine_user_prompt(feedback, edit_context=edit_context)
 
         # Use structured output validator with retry

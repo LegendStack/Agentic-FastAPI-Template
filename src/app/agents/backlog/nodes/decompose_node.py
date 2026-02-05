@@ -14,8 +14,9 @@ from ..config import BacklogAgentConfig
 from ..prompts import get_decompose_system_prompt, get_decompose_user_prompt, get_refine_system_prompt
 from ..schemas import AcceptanceCriteria, DecompositionResult, Epic, UserStory
 from ..state import BacklogAgentState
-from ....core.db.database import async_get_db
 from ...vector_stores import VectorStoreFactory
+from ....core.config import settings
+from ....core.db.database import async_get_db
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ class DecomposeNode:
         Returns:
             State update with stories and current_result
         """
-        logger.info("DecomposeNode: Starting decomposition")
+        logger.info(f"DecomposeNode: Starting decomposition (USE_MOCKS={self.config.USE_MOCKS}, global_settings={settings.BACKLOG_USE_MOCKS})")
 
         parsed_epic = state.get("parsed_epic")
         if not parsed_epic:
@@ -133,7 +134,12 @@ class DecomposeNode:
                 reference_stories = await self._retrieve_reference_stories(parsed_epic)
                 
                 # 2. LLM Decomposition with context
-                result, usage = await self._llm_decompose(parsed_epic, reference_stories=reference_stories)
+                story_template = state.get("story_template", self.config.STORY_TEMPLATE)
+                result, usage = await self._llm_decompose(
+                    parsed_epic, 
+                    reference_stories=reference_stories,
+                    story_template=story_template
+                )
 
             logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
@@ -154,7 +160,12 @@ class DecomposeNode:
         logger.info("DecomposeNode: Using mock decomposition")
         return MockDecomposeResult.generate(epic, self.config)
 
-    async def _llm_decompose(self, epic: Epic, reference_stories: list[UserStory] | None = None) -> tuple[DecompositionResult, dict[str, Any]]:
+    async def _llm_decompose(
+        self, 
+        epic: Epic, 
+        reference_stories: list[UserStory] | None = None,
+        story_template: str = "standard"
+    ) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to decompose the epic."""
         if not self.llm_service:
             self.llm_service = LLMService()
@@ -173,7 +184,7 @@ class DecomposeNode:
 
         # Build prompts
         system_prompt = get_decompose_system_prompt(
-            story_template=self.config.STORY_TEMPLATE,
+            story_template=story_template,
             ac_style=self.config.AC_STYLE,
             project_key=epic.project_key,
         )

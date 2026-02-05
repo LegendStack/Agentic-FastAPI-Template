@@ -249,6 +249,8 @@ class BacklogAssistantAgent:
         # Build new state
         messages = existing_state.get("messages", [])
         messages.append({"role": "user", "content": message})
+        
+        logger.info(f"BacklogAssistantAgent: Chat loop starting. is_first={not existing_state.get('stories')}")
 
         initial_state: BacklogAgentState = {
             "messages": messages,
@@ -260,6 +262,7 @@ class BacklogAssistantAgent:
             "is_first_message": not existing_state.get("stories"),
             "is_save_requested": False,
             "output_format": output_format or existing_state.get("output_format", self.config.DEFAULT_OUTPUT_FORMAT),
+            "story_template": existing_state.get("story_template", self.config.STORY_TEMPLATE),
             "formatted_output": None,
             "export_result": None,
             "thread_id": thread_id,

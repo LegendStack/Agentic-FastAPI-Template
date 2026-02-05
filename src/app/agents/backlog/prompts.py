@@ -41,6 +41,14 @@ Do not include any text outside the JSON object."""
 REFINE_SYSTEM_PROMPT = """You are an expert Agile Product Owner refining user stories based on feedback for the project: {project_context}.
 You have previously decomposed an epic into user stories. The user is now providing feedback.
 
+## Your Expertise
+- Maintaining consistent story structure
+- Updating requirements without losing detail
+- Handling manual edits with respect
+
+## Story Format Guidelines
+{story_template_instructions}
+
 ## Current Decomposition
 {current_decomposition}
 
@@ -180,10 +188,20 @@ def get_decompose_user_prompt(
     )
 
 
-def get_refine_system_prompt(current_decomposition: str, project_key: str | None = None) -> str:
+def get_refine_system_prompt(
+    current_decomposition: str, 
+    story_template: str = "standard",
+    project_key: str | None = None
+) -> str:
     """Build the refinement system prompt with current state and project context."""
     project_context = f"Project {project_key}" if project_key else "General Project"
-    return REFINE_SYSTEM_PROMPT.format(current_decomposition=current_decomposition, project_context=project_context)
+    return REFINE_SYSTEM_PROMPT.format(
+        current_decomposition=current_decomposition, 
+        project_context=project_context,
+        story_template_instructions=STORY_TEMPLATE_INSTRUCTIONS.get(
+            story_template, STORY_TEMPLATE_INSTRUCTIONS["standard"]
+        ),
+    )
 
 
 def get_refine_user_prompt(feedback: str, edit_context: str | None = None) -> str:

@@ -36,28 +36,28 @@ export const ProjectSelector = () => {
     );
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-brand-navy/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="w-full max-w-2xl p-8 glass-card border-brand-blue/20 shadow-2xl"
+                className="w-full max-w-2xl p-8 glass-card border-border-primary shadow-2xl"
             >
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 rounded-lg bg-brand-blue/10">
-                        <Building2 className="w-8 h-8 neon-text" />
+                    <div className="p-3 rounded-lg bg-accent-primary/10">
+                        <Building2 className="w-8 h-8 text-accent-primary" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold text-white tracking-tight">Active Project</h1>
-                        <p className="text-slate-400">Select a JIRA project context to begin decomposition</p>
+                        <h1 className="text-3xl font-bold text-text-primary tracking-tight">Active Project</h1>
+                        <p className="text-text-secondary">Select a JIRA project context to begin decomposition</p>
                     </div>
                 </div>
 
                 <div className="relative mb-6">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
                     <input
                         type="text"
                         placeholder="Search projects..."
-                        className="w-full pl-12 pr-4 py-4 bg-brand-navy/50 border border-slate-700/50 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none transition-all text-white"
+                        className="w-full pl-12 pr-4 py-4 bg-bg-secondary/50 border border-border-primary rounded-xl focus:ring-2 focus:ring-accent-primary outline-none transition-all text-text-primary placeholder:text-text-tertiary"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         autoFocus
@@ -89,20 +89,20 @@ export const ProjectSelector = () => {
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: idx * 0.1 }}
                                 onClick={() => setProject(project.key)}
-                                className="flex items-center justify-between p-5 glass hover:bg-brand-blue/5 rounded-xl border border-slate-700/50 transition-all group text-left"
+                                className="flex items-center justify-between p-5 glass hover:bg-accent-primary/5 rounded-xl border border-border-primary transition-all group text-left"
                             >
                                 <div className="flex items-center gap-4">
                                     {project.avatar && (
                                         <img src={project.avatar} alt="" className="w-10 h-10 rounded-lg" />
                                     )}
                                     <div className="flex flex-col items-start">
-                                        <span className="text-lg font-semibold text-white group-hover:neon-text transition-colors">
+                                        <span className="text-lg font-semibold text-text-primary group-hover:text-accent-primary transition-colors">
                                             {project.name}
                                         </span>
-                                        <span className="text-sm text-slate-500 font-mono tracking-widest">{project.key}</span>
+                                        <span className="text-sm text-text-tertiary font-mono tracking-widest">{project.key}</span>
                                     </div>
                                 </div>
-                                <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-brand-blue group-hover:translate-x-1 transition-all" />
+                                <ChevronRight className="w-5 h-5 text-text-tertiary group-hover:text-accent-primary group-hover:translate-x-1 transition-all" />
                             </motion.button>
                         ))
                     ) : (

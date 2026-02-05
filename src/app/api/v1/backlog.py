@@ -176,6 +176,7 @@ async def decompose_epic(
         DEFAULT_OUTPUT_FORMAT=request.output_format,
         ENABLE_EDGE_CASES=request.enable_edge_cases,
         ENABLE_COMPLEXITY_ESTIMATION=request.enable_complexity_estimation,
+        USE_MOCKS=False,  # Explicitly disable mocks for the real endpoint
     )
 
     agent = get_agent(db, config)
@@ -224,7 +225,8 @@ async def refine_decomposition(
     - "Add more edge cases" (Continuation)
     - "Make these BDD" + [stories] (Hydration)
     """
-    agent = get_agent(db)
+    config = BacklogAgentConfig(USE_MOCKS=False)
+    agent = get_agent(db, config)
 
     result = await agent.chat(
         thread_id=thread_id,
@@ -339,7 +341,8 @@ async def refine_existing_stories(
     Directly injects existing stories into the agent state and
     processes the feedback message. This is the "Door B" entry point.
     """
-    agent = get_agent(db)
+    config = BacklogAgentConfig(USE_MOCKS=False)
+    agent = get_agent(db, config)
 
     thread_id = request.thread_id or str(uuid.uuid4())
 
@@ -387,6 +390,7 @@ async def export_to_jira(
     config = BacklogAgentConfig(
         ENABLE_JIRA_EXPORT=True,
         JIRA_PROJECT_KEY=request.project_key if request else None,
+        USE_MOCKS=False,
     )
 
     agent = get_agent(db, config)
