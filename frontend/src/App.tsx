@@ -80,15 +80,7 @@ const Dashboard = () => {
         </div>
 
 
-        <div className="flex-1 overflow-hidden flex flex-col border-t border-border-primary mt-4">
-          <ConversationHistory
-            onSelectThread={handleSelectThread}
-            onNewConversation={handleNewConversation}
-            currentThreadId={currentThreadId}
-          />
-        </div>
-
-        <div className="px-4 mb-4 mt-auto pt-4 border-t border-border-primary">
+        <div className="px-4 mt-4">
           <button
             onClick={() => setProject(null)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-text-secondary hover:text-accent-primary hover:bg-accent-primary/10 border border-border-primary hover:border-accent-primary/30"
@@ -97,6 +89,15 @@ const Dashboard = () => {
             <span className="text-sm font-semibold">Change Project</span>
           </button>
         </div>
+
+        <div className="flex-1 overflow-hidden flex flex-col border-t border-border-primary mt-4">
+          <ConversationHistory
+            onSelectThread={handleSelectThread}
+            onNewConversation={handleNewConversation}
+            currentThreadId={currentThreadId}
+          />
+        </div>
+
 
         <div className="p-4 border-t border-border-primary m-4 rounded-2xl glass">
           <div className="flex items-center gap-3 mb-2">
@@ -127,6 +128,11 @@ const Dashboard = () => {
                 <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
                   Refinement
                   <Sparkles className="w-4 h-4 text-accent-primary" />
+                  {selectedProject && (
+                    <span className="ml-2 px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
+                      {selectedProject}
+                    </span>
+                  )}
                 </h2>
                 <button
                   onClick={handleNewConversation}
