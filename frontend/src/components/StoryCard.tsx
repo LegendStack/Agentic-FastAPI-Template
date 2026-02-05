@@ -69,13 +69,33 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                     {story.acceptance_criteria.length > 0 ? (
                         <div className="space-y-1">
                             {story.acceptance_criteria.map((ac, idx) => (
-                                <div key={idx} className="flex gap-2">
-                                    <span className="text-brand-blue">•</span>
-                                    <div className="flex-1">
-                                        <ReactMarkdown>
-                                            {typeof ac === 'string' ? ac : (ac.description || JSON.stringify(ac))}
-                                        </ReactMarkdown>
+                                <div key={idx} className="flex flex-col gap-1 py-1 group/ac">
+                                    <div className="flex gap-2">
+                                        <span className="text-brand-blue font-bold">•</span>
+                                        <div className="flex-1 text-slate-300 font-medium">
+                                            <ReactMarkdown>
+                                                {typeof ac === 'string' ? ac : ac.description}
+                                            </ReactMarkdown>
+                                        </div>
                                     </div>
+
+                                    {/* BDD Given/When/Then Block */}
+                                    {typeof ac !== 'string' && ac.given && ac.when && ac.then && (
+                                        <div className="ml-5 mt-1 p-3 rounded-lg bg-slate-800/40 border border-slate-700/50 flex flex-col gap-1.5 text-[11px]">
+                                            <div className="flex gap-2">
+                                                <span className="text-brand-blue/60 font-mono w-10 shrink-0 uppercase tracking-tighter">Given</span>
+                                                <span className="text-slate-400">{ac.given}</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <span className="text-brand-blue/60 font-mono w-10 shrink-0 uppercase tracking-tighter">When</span>
+                                                <span className="text-slate-400">{ac.when}</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <span className="text-brand-blue/60 font-mono w-10 shrink-0 uppercase tracking-tighter">Then</span>
+                                                <span className="text-slate-200 font-medium">{ac.then}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

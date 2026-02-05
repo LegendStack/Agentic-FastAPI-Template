@@ -3,11 +3,19 @@ import { useMutation } from '@tanstack/react-query';
 import api from '../api/client';
 import { useProjectContext } from './useProjectContext';
 
+export interface AcceptanceCriteria {
+    description: string;
+    given?: string;
+    when?: string;
+    then?: string;
+    is_edge_case?: boolean;
+}
+
 export interface UserStory {
     id: string;
     title: string;
     description: string;
-    acceptance_criteria: any[];
+    acceptance_criteria: AcceptanceCriteria[];
     edge_cases: string[];
     technical_notes: string[];
     dependencies: string[];
@@ -15,8 +23,26 @@ export interface UserStory {
     tags: string[];
 }
 
+export interface Message {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+}
+
+export interface ArtifactVersion {
+    checkpoint_id: string;
+    timestamp: number | null;
+    summary: string;
+    story_count: number;
+    is_refinement: boolean;
+}
+
 export const useBacklog = (initialThreadId?: string) => {
     const [stories, setStories] = useState<UserStory[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [versions, setVersions] = useState<ArtifactVersion[]>([]);
+    const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
     const [recommendations, setRecommendations] = useState<string[]>([]);
     const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(initialThreadId);
     const { selectedProject } = useProjectContext();
@@ -43,27 +69,42 @@ export const useBacklog = (initialThreadId?: string) => {
         }
     }, [currentThreadId]);
 
+    const fetchVersions = useCallback(async (threadId: string) => {
+        try {
+            const response = await api.get(`/backlog/history/${threadId}`);
+            setVersions(response.data.versions);
+        } catch (err) {
+            console.error('Failed to fetch versions:', err);
+        }
+    }, []);
+
+    // Load a specific version/checkpoint
+    const loadVersion = useCallback(async (checkpointId: string) => {
+        if (!currentThreadId) return;
+        setActiveVersionId(checkpointId);
+        try {
+            const response = await api.get(`/backlog/stories/${currentThreadId}`, {
+                params: { checkpoint_id: checkpointId }
+            });
+            if (response.data.stories) {
+                setStories(response.data.stories);
+            }
+        } catch (err) {
+            console.error('Failed to load version:', err);
+        }
+    }, [currentThreadId]);
+
     // Unified Chat / Refinement Mutation
     const chatMutation = useMutation({
         mutationFn: async ({ message, localStories }: { message: string, localStories?: UserStory[] }) => {
-            // For new chats, we use a placeholder or let the backend generate it.
-            // But since our API expects a thread_id in the path, we can pass 'new' 
-            // and have the backend handle redirect/creation, or we can use a temporary ID 
-            // that gets replaced by the authoritative one from the response.
-            //
-            // BETTER APPROACH for this API: Use 'new' or a distinct indicator if API supports it.
-            // However, looking at backlog.py, it expects a thread_id path param.
-            // Let's generate a temporary client-side ID to start, but IMMEDIATELY replace it 
-            // with the one returned by the server if they differ (or just trust the server response).
-
-            // Actually, the user wants to AVOID client-generated IDs like "thread-xxxx".
-            // Let's use 'new' as the thread ID for the initial request if supported, 
-            // OR let's just make the initial request to /decompose (which returns a thread_id)
-            // instead of /chat/{thread_id} for the first message?
-
-            // Looking at existing API:
-            // POST /backlog/decompose -> Body: { epic_description } -> Returns { thread_id, ... }
-            // POST /backlog/chat/{thread_id} -> Body: { message }
+            // Optimistically add user message
+            const userMsg: Message = {
+                id: `msg-${Date.now()}`,
+                role: 'user',
+                content: message,
+                timestamp: Date.now()
+            };
+            setMessages(prev => [...prev, userMsg]);
 
             let activeThreadId = currentThreadId;
             let response;
@@ -71,7 +112,6 @@ export const useBacklog = (initialThreadId?: string) => {
             try {
                 if (!activeThreadId) {
                     // FIRST MESSAGE: Use the /decompose endpoint which generates the ID
-                    console.log(`[BacklogHook] Starting new decomposition via /decompose`);
                     response = await api.post(`/backlog/decompose`, {
                         epic_description: message,
                         output_format: 'json'
@@ -80,7 +120,6 @@ export const useBacklog = (initialThreadId?: string) => {
                     });
                 } else {
                     // SUBSEQUENT MESSAGES: Use /chat/{thread_id}
-                    console.log(`[BacklogHook] Calling /chat/${activeThreadId}`);
                     response = await api.post(`/backlog/chat/${activeThreadId}`, {
                         message,
                         stories: localStories,
@@ -90,11 +129,21 @@ export const useBacklog = (initialThreadId?: string) => {
                     });
                 }
 
-                console.log(`[BacklogHook] API Success!`, response.data);
+                // Add assistant response summary
+                const assistantMsg: Message = {
+                    id: `msg-${Date.now() + 1}`,
+                    role: 'assistant',
+                    content: response.data.summary || (activeThreadId ? "Refinement complete." : "Decomposition complete."),
+                    timestamp: Date.now()
+                };
+                setMessages(prev => [...prev, assistantMsg]);
 
                 // ALWAYS update the thread ID from the backend response
                 if (response.data.thread_id) {
                     setCurrentThreadId(response.data.thread_id);
+                    // Refresh versions after a successful chat
+                    fetchVersions(response.data.thread_id);
+                    setActiveVersionId(null); // Reset to "Latest"
                 }
 
                 return response.data;
@@ -116,6 +165,7 @@ export const useBacklog = (initialThreadId?: string) => {
     // Load an existing thread
     const loadThread = useCallback(async (threadId: string) => {
         setCurrentThreadId(threadId);
+        fetchVersions(threadId);
         try {
             const response = await api.get(`/backlog/stories/${threadId}`);
             if (response.data.stories) {
@@ -124,18 +174,37 @@ export const useBacklog = (initialThreadId?: string) => {
             if (response.data.recommendations) {
                 setRecommendations(response.data.recommendations);
             }
+
+            // Use messages from backend if provided (Phase 23 fix)
+            if (response.data.messages && response.data.messages.length > 0) {
+                setMessages(response.data.messages);
+            } else if (response.data.metadata?.epic_description) {
+                // Fallback for older threads or if messages missing
+                const epicMsg: Message = {
+                    id: 'msg-initial-epic',
+                    role: 'user',
+                    content: response.data.metadata.epic_description,
+                    timestamp: 0
+                };
+                const assistMsg: Message = {
+                    id: 'msg-initial-assist',
+                    role: 'assistant',
+                    content: response.data.summary || "Previous decomposition loaded.",
+                    timestamp: 1
+                };
+                setMessages([epicMsg, assistMsg]);
+            }
+
             // Auto-select project from metadata (Feature A)
             if (response.data.metadata?.project_key) {
                 console.log(`[BacklogHook] Auto-selecting project: ${response.data.metadata.project_key}`);
-                // Since this hook is often called from App.tsx or similar, 
-                // we rely on the project context to be available.
             }
             return response.data;
         } catch (err) {
             console.error('Failed to load thread:', err);
             throw err;
         }
-    }, []);
+    }, [fetchVersions]);
 
     const updateStoryLocally = useCallback((updatedStory: UserStory) => {
         setStories(prev => prev.map(s => s.id === updatedStory.id ? updatedStory : s));
@@ -143,6 +212,9 @@ export const useBacklog = (initialThreadId?: string) => {
 
     const reset = useCallback(() => {
         setStories([]);
+        setMessages([]);
+        setVersions([]);
+        setActiveVersionId(null);
         setRecommendations([]);
         setCurrentThreadId(undefined);
     }, []);
@@ -150,6 +222,10 @@ export const useBacklog = (initialThreadId?: string) => {
     return {
         stories,
         setStories,
+        messages,
+        versions,
+        activeVersionId,
+        loadVersion,
         recommendations,
         currentThreadId,
         loadThread,

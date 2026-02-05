@@ -74,8 +74,14 @@ class FormatNode:
             if export_result:
                 formatted = self._append_export_confirmation(formatted, export_result)
 
+            # Add assistant message to history (Phase 24 Proper Fix)
+            messages = state.get("messages", [])
+            if current_result and current_result.summary:
+                messages = messages + [{"role": "assistant", "content": current_result.summary}]
+
             return {
                 "formatted_output": formatted,
+                "messages": messages,
                 "error": None,
             }
 

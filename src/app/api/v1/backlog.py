@@ -255,6 +255,7 @@ async def refine_decomposition(
 @router.get("/stories/{thread_id}")
 async def get_stories(
     thread_id: str,
+    checkpoint_id: str | None = None,
     output_format: Literal["json", "markdown"] = "json",
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
 ) -> dict:
@@ -262,10 +263,14 @@ async def get_stories(
     Get the current decomposition for a thread.
 
     Returns all stories and the full decomposition result.
+    If checkpoint_id is provided, returns that specific version.
     """
     agent = get_agent(db)
-
-    result = await agent.get_stories(thread_id)
+    
+    if checkpoint_id:
+        result = await agent.get_stories_at_version(thread_id, checkpoint_id)
+    else:
+        result = await agent.get_stories(thread_id)
 
     if result.get("error"):
         raise HTTPException(status_code=404, detail=result["error"])
@@ -278,6 +283,48 @@ async def get_stories(
         result["formatted_output"] = decomp.to_markdown()
 
     return result
+
+
+@router.get("/history/{thread_id}")
+async def get_thread_history(
+    thread_id: str,
+    db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+) -> dict:
+    """
+    Get the state history for a thread.
+
+    Returns a list of available checkpoints (versions) with timestamps
+    and basic summaries to power the Artifact version selector.
+    """
+    agent = get_agent(db)
+    config = {"configurable": {"thread_id": thread_id}}
+    
+    versions = []
+    async for state in agent.graph.aget_state_history(config):
+        # Only include terminal states (completed turns) to avoid version clutter
+        if state.next or not state.values or "stories" not in state.values:
+            continue
+            
+        current_result = state.values.get("current_result")
+        summary = "Initial Decomposition"
+        if isinstance(current_result, dict):
+            summary = current_result.get("summary", "Refinement Step")
+        elif hasattr(current_result, "summary"):
+            summary = current_result.summary
+
+        versions.append({
+            "checkpoint_id": state.config.get("configurable", {}).get("checkpoint_id"),
+            "timestamp": state.created_at if hasattr(state, "created_at") else None,
+            "summary": summary[:100] + ("..." if len(summary) > 100 else ""),
+            "story_count": len(state.values.get("stories", [])),
+            # Metadata to help frontend identify the trigger
+            "is_refinement": not state.values.get("is_first_message", True)
+        })
+
+    return {
+        "thread_id": thread_id,
+        "versions": versions
+    }
 
 
 @router.post("/refine", response_model=DecomposeResponse)

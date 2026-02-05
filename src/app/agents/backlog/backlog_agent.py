@@ -295,8 +295,6 @@ class BacklogAssistantAgent:
                 # Add user message
                 await conversation_service.add_message(thread_id=thread_id, role="user", content=message)
 
-        # Run the graph
-        final_state = None
         async for event in self.graph.astream(initial_state, config=config, stream_mode="values"):
             final_state = event
 
@@ -458,6 +456,7 @@ class BacklogAssistantAgent:
                 "thread_id": thread_id,
                 "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in state.get("stories", [])],
                 "result": current_result.model_dump() if current_result else None,
+                "messages": state.get("messages", []),
                 "metadata": metadata,
             }
 
@@ -465,6 +464,59 @@ class BacklogAssistantAgent:
             return {
                 "thread_id": thread_id,
                 "error": f"Failed to retrieve stories: {e}",
+                "stories": [],
+            }
+
+    async def get_stories_at_version(self, thread_id: str, checkpoint_id: str) -> dict[str, Any]:
+        """
+        Get the decomposition result at a specific version (checkpoint).
+
+        Args:
+            thread_id: Thread ID to retrieve
+            checkpoint_id: Specific checkpoint ID (version)
+
+        Returns:
+            Decomposition result at that version or error
+        """
+        if not self.checkpointer:
+            return {
+                "thread_id": thread_id,
+                "error": "No checkpointer configured",
+                "stories": [],
+            }
+
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_id": checkpoint_id}}
+
+        try:
+            saved_state = await self.graph.aget_state(config)
+            if not saved_state or not saved_state.values:
+                return {
+                    "thread_id": thread_id,
+                    "checkpoint_id": checkpoint_id,
+                    "error": "No decomposition found for this specific version",
+                    "stories": [],
+                }
+
+            state = saved_state.values
+            current_result = state.get("current_result")
+
+            if isinstance(current_result, dict):
+                current_result = DecompositionResult.model_validate(current_result)
+
+            return {
+                "thread_id": thread_id,
+                "checkpoint_id": checkpoint_id,
+                "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in state.get("stories", [])],
+                "result": current_result.model_dump() if current_result else None,
+                "summary": current_result.summary if current_result else None,
+                "messages": state.get("messages", []),
+            }
+
+        except Exception as e:
+            return {
+                "thread_id": thread_id,
+                "checkpoint_id": checkpoint_id,
+                "error": f"Failed to retrieve version {checkpoint_id}: {e}",
                 "stories": [],
             }
 

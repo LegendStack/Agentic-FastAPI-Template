@@ -26,7 +26,7 @@ export const OracleDrawer = ({ onSendMessage, isProcessing, recommendations = []
     };
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 p-6 flex flex-col items-center pointer-events-none z-50">
+        <div className="w-full p-6 flex flex-col items-center pointer-events-none mt-auto sticky bottom-0 z-30">
             <AnimatePresence>
                 {recommendations.length > 0 && !isProcessing && (
                     <motion.div
@@ -50,9 +50,9 @@ export const OracleDrawer = ({ onSendMessage, isProcessing, recommendations = []
 
             <motion.form
                 onSubmit={handleSubmit}
-                initial={{ y: 100 }}
-                animate={{ y: 0 }}
-                className="w-full max-w-4xl glass p-2 rounded-2xl shadow-[0_0_50px_rgba(100,255,218,0.15)] flex gap-2 pointer-events-auto border-brand-blue/20"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="w-full glass p-2 rounded-2xl shadow-xl flex gap-2 pointer-events-auto border-brand-blue/20"
             >
                 <div className="flex-1 relative">
                     <Sparkles className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${isProcessing ? 'text-brand-blue animate-spin' : 'text-slate-500'}`} />

@@ -116,9 +116,17 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
 
         result = await self.db.execute(query)
         for row in result.scalars():
+            checkpoint_data = row.checkpoint
+            if isinstance(checkpoint_data, dict) and "type" in checkpoint_data and "data" in checkpoint_data:
+                checkpoint_type = checkpoint_data["type"]
+                checkpoint_bytes = bytes.fromhex(checkpoint_data["data"])
+                checkpoint = self.serde.loads_typed((checkpoint_type, checkpoint_bytes))
+            else:
+                checkpoint = checkpoint_data
+
             yield CheckpointTuple(
                 config={"configurable": {"thread_id": row.thread_id, "checkpoint_id": row.checkpoint_id}},
-                checkpoint=row.checkpoint,
+                checkpoint=checkpoint,
                 metadata=row.metadata_json,
                 parent_config={"configurable": {"thread_id": row.thread_id, "checkpoint_id": row.parent_id}} if row.parent_id else None
             )

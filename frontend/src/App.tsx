@@ -1,15 +1,18 @@
+import { useState } from 'react';
 import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { msalConfig, loginRequest } from './authConfig';
 import { ProjectProvider, useProjectContext } from './hooks/useProjectContext';
 import { ProjectSelector } from './components/ProjectSelector';
-import { StoryCard } from './components/StoryCard';
 import { OracleDrawer } from './components/OracleDrawer';
 import { ConversationHistory } from './components/ConversationHistory';
+import { MessageList } from './components/MessageList';
+import { ArtifactBoard } from './components/ArtifactBoard';
 import { useBacklog } from './hooks/useBacklog';
-import { Layers, LogOut, User, LayoutDashboard, Sparkles } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Layers, LogOut, User, LayoutDashboard, Sparkles, ChevronLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 const queryClient = new QueryClient();
@@ -17,9 +20,15 @@ const queryClient = new QueryClient();
 const Dashboard = () => {
   const { instance, accounts } = useMsal();
   const { selectedProject, setProject } = useProjectContext();
+  const artifactPanelRef = usePanelRef();
+  const [isArtifactCollapsed, setIsArtifactCollapsed] = useState(false);
   const {
     stories,
     setStories,
+    messages,
+    versions,
+    activeVersionId,
+    loadVersion,
     isProcessing,
     sendMessage,
     updateStoryLocally,
@@ -57,7 +66,7 @@ const Dashboard = () => {
   return (
     <div className="flex h-screen bg-brand-navy overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-72 border-r border-slate-700/50 flex flex-col glass z-10">
+      <aside className="w-72 border-r border-slate-700/50 flex flex-col glass z-10 shrink-0">
         <div className="p-6 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-brand-blue bg-opacity-20">
             <Layers className="w-6 h-6 neon-text" />
@@ -103,64 +112,93 @@ const Dashboard = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-32">
-        <header className="sticky top-0 z-20 glass px-12 py-6 flex items-center justify-between border-b border-slate-700/30">
-          <div>
-            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-              Backlog Board
-              <span className="px-3 py-1 rounded-full bg-brand-blue/10 border border-brand-blue/30 text-[10px] uppercase tracking-widest text-brand-blue">
-                JIRA: {selectedProject}
-              </span>
-            </h2>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleNewConversation}
-              className="px-6 py-2 border border-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-800 transition-all"
-            >
-              Reset
-            </button>
-          </div>
-        </header>
+      {/* Main Content: Resizable Split View */}
+      <div className="flex-1 flex overflow-hidden">
+        <PanelGroup orientation="horizontal">
+          {/* Chat Pane (Left) */}
+          <Panel defaultSize={40} minSize={25}>
+            <main className="h-full flex flex-col border-r border-slate-700/30 bg-brand-navy/20 relative">
+              <header className="px-8 py-6 flex items-center justify-between border-b border-slate-700/30 shrink-0">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  Refinement
+                  <Sparkles className="w-4 h-4 text-brand-blue" />
+                </h2>
+                <button
+                  onClick={handleNewConversation}
+                  className="text-[10px] font-bold text-slate-500 hover:text-white transition-colors"
+                >
+                  Reset
+                </button>
+              </header>
 
-        <div className="max-w-6xl mx-auto px-12 py-8">
-          <AnimatePresence mode="popLayout">
-            {stories.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4">
-                {stories.map(story => (
-                  <StoryCard
-                    key={story.id}
-                    story={story}
-                    onUpdate={updateStoryLocally}
-                    onDelete={deleteStory}
-                  />
-                ))}
+              <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
+                <MessageList messages={messages} />
+                {isProcessing && (
+                  <div className="px-12 py-4 flex gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700">
+                      <Sparkles className="w-4 h-4 text-brand-blue animate-spin" />
+                    </div>
+                    <div className="bg-slate-800/20 px-6 py-4 rounded-2xl border border-slate-700/50">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce" />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center mt-20 text-center"
-              >
-                <div className="w-20 h-20 rounded-3xl bg-slate-800/50 border border-slate-700 flex items-center justify-center mb-6 animate-pulse-slow">
-                  <Sparkles className="w-10 h-10 text-brand-blue" />
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">No Stories Yet</h3>
-                <p className="text-slate-500 max-w-sm">
-                  Start by providing an epic description in the Oracle below, or click "Start New Epic" to see the agent in action.
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
 
-        <OracleDrawer
-          onSendMessage={handleRefine}
-          isProcessing={isProcessing}
-          recommendations={recommendations}
-        />
-      </main>
+              <OracleDrawer
+                onSendMessage={handleRefine}
+                isProcessing={isProcessing}
+                recommendations={recommendations}
+              />
+            </main>
+          </Panel>
+
+          <PanelResizeHandle className="w-1 bg-slate-800/50 hover:bg-brand-blue/50 transition-colors cursor-col-resize flex items-center justify-center group relative">
+            <div className="w-px h-8 bg-slate-700 group-hover:bg-brand-blue/50" />
+            <div className="absolute -inset-x-2 h-full cursor-col-resize z-50" />
+          </PanelResizeHandle>
+
+          {/* Expand Button (Visible only when collapsed) */}
+          {isArtifactCollapsed && (
+            <button
+              onClick={() => artifactPanelRef.current?.expand()}
+              className="fixed right-0 top-1/2 -translate-y-1/2 p-3 bg-brand-blue text-brand-navy rounded-l-2xl shadow-[0_0_30px_rgba(100,255,218,0.3)] z-50 hover:bg-brand-neon transition-all hover:pr-5 group border border-brand-blue/50"
+              title="Expand Backlog"
+            >
+              <ChevronLeft className="w-6 h-6 group-hover:scale-110 transition-transform" />
+            </button>
+          )}
+
+          {/* Artifact Pane (Right) */}
+          <Panel
+            defaultSize={60}
+            minSize={20}
+            collapsible
+            panelRef={artifactPanelRef}
+            onResize={(size) => {
+              if (size.asPercentage === 0) setIsArtifactCollapsed(true);
+              else if (isArtifactCollapsed) setIsArtifactCollapsed(false);
+            }}
+          >
+            <div className="h-full overflow-hidden">
+              <ArtifactBoard
+                stories={stories}
+                versions={versions}
+                activeVersionId={activeVersionId}
+                projectName={selectedProject}
+                onLoadVersion={loadVersion}
+                onUpdateStory={updateStoryLocally}
+                onDeleteStory={deleteStory}
+                onCollapse={() => artifactPanelRef.current?.collapse()}
+              />
+            </div>
+          </Panel>
+        </PanelGroup>
+      </div>
     </div>
   );
 };
