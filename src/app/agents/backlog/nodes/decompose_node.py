@@ -5,7 +5,6 @@ Core story decomposition logic using LLM with structured output.
 Generates user stories from an epic description.
 """
 
-import json
 import logging
 from typing import Any
 

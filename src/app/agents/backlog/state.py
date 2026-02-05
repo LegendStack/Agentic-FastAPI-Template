@@ -5,7 +5,7 @@ TypedDict defining the state that flows through the LangGraph workflow.
 Each node can read and update specific fields of this state.
 """
 
-from typing import Any, Literal
+from typing import Any
 
 from typing_extensions import TypedDict
 

@@ -79,7 +79,7 @@ class InputNode:
         # HYDRATION DETECTION: If stories are already present in the state (e.g. from /refine endpoint)
         if existing_stories and is_first_message:
             logger.info("InputNode: Detected pre-populated stories (Hydration)")
-            
+
             # NORMALIZE: Ensure stories are dicts or UserStory objects for DecompositionResult
             normalized_stories = []
             for s in existing_stories:
@@ -90,20 +90,18 @@ class InputNode:
 
             # Create a shell result for the graph to proceed
             from ..schemas import DecompositionResult, Epic
-            shell_epic = Epic(
-                title="Imported stories", 
-                description="Refining pre-populated stories"
-            )
+
+            shell_epic = Epic(title="Imported stories", description="Refining pre-populated stories")
             shell_result = DecompositionResult(
                 epic=shell_epic,
-                stories=normalized_stories, # Use normalized ones
+                stories=normalized_stories,  # Use normalized ones
                 summary="Imported stories for refinement",
             )
-            
+
             return {
                 "refinement_feedback": user_message,
                 "current_result": shell_result,
-                "stories": normalized_stories, # Also update the state stories to normalized versions
+                "stories": normalized_stories,  # Also update the state stories to normalized versions
                 "is_first_message": False,
                 "error": None,
             }

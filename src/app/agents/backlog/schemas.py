@@ -5,7 +5,7 @@ Pydantic models for structured LLM output with validation.
 These models ensure decomposition results are well-formed and consistent.
 """
 
-from typing import Literal, Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -98,6 +98,7 @@ class UserStory(BaseModel):
         None,
         description="T-shirt size complexity estimate",
     )
+
     @model_validator(mode="before")
     @classmethod
     def validate_complexity(cls, data: Any) -> Any:

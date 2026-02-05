@@ -5,7 +5,6 @@ Handle conversational refinement based on user feedback.
 Updates the decomposition based on user's requests.
 """
 
-import json
 import logging
 from typing import Any
 
@@ -13,7 +12,7 @@ from ...azure_openai import LLMService
 from ...structured_output import StructuredOutputValidator
 from ..config import BacklogAgentConfig
 from ..prompts import get_refine_system_prompt, get_refine_user_prompt
-from ..schemas import AcceptanceCriteria, DecompositionResult, Epic, UserStory
+from ..schemas import AcceptanceCriteria, DecompositionResult, UserStory
 from ..state import BacklogAgentState
 
 logger = logging.getLogger(__name__)
@@ -105,8 +104,8 @@ class RefineNode:
             # Add edge cases to all stories
             for story in stories:
                 if len(story.edge_cases) < 3:
-                    story.edge_cases.append(f"Handle timeout scenario")
-                    story.edge_cases.append(f"Handle concurrent access")
+                    story.edge_cases.append("Handle timeout scenario")
+                    story.edge_cases.append("Handle concurrent access")
 
         elif "split" in feedback_lower:
             # Split the last story into two
@@ -171,8 +170,7 @@ class RefineNode:
             epic=current_result.epic,
             stories=stories,
             summary=f"Refined decomposition based on feedback. Now contains {len(stories)} stories.",
-            recommendations=current_result.recommendations
-            + ["Review changes from latest refinement"],
+            recommendations=current_result.recommendations + ["Review changes from latest refinement"],
         )
 
     async def _llm_refine(

@@ -129,8 +129,6 @@ class ExportRequest(BaseModel):
     )
 
 
-
-
 class ExportResponse(BaseModel):
     """Response model for JIRA export result."""
 
@@ -373,6 +371,6 @@ async def get_agent_config() -> dict:
     Useful for understanding available options and current defaults.
     """
     from ...agents.backlog import BacklogAssistantAgent
-    
+
     agent = BacklogAssistantAgent()
     return agent.get_config_summary()

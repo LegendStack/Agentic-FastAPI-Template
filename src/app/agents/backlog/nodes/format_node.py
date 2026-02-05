@@ -49,7 +49,7 @@ class FormatNode:
         if not current_result:
             return {
                 "error": "No decomposition result to format",
-                "is_first_message": not state.get("stories"), # Assuming 'stories' indicates existing state
+                "is_first_message": not state.get("stories"),  # Assuming 'stories' indicates existing state
                 "is_export_requested": False,
             }
 
@@ -90,14 +90,14 @@ class FormatNode:
         issues = export_result.get("issues", [])
 
         confirmation = f"\n\n---\n### 🚀 JIRA SAVE: {status.upper()}\n{message}\n\n"
-        
+
         if issues:
             confirmation += "Created Issues:\n"
             for issue in issues:
                 key = issue.get("jira_key", "N/A")
                 url = issue.get("url", "#")
                 confirmation += f"- **[{key}]({url})**\n"
-        
+
         return formatted + confirmation
 
     def _format_json(self, result: DecompositionResult) -> str:

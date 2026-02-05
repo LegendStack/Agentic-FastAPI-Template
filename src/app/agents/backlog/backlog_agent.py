@@ -154,7 +154,7 @@ class BacklogAssistantAgent:
         is_save = state.get("is_save_requested")
         is_first = state.get("is_first_message")
         has_stories = bool(state.get("stories"))
-        
+
         logger.info(f"BacklogAgent: Routing - save_req={is_save}, first={is_first}, has_stories={has_stories}")
 
         if state.get("error"):
@@ -270,31 +270,30 @@ class BacklogAssistantAgent:
 
         if self.checkpointer:
             # Sync with ConversationService for history tracking
-            # We do this asynchronously to avoid blocking the main flow if possible, 
+            # We do this asynchronously to avoid blocking the main flow if possible,
             # but here we'll await it to ensure consistency.
             if hasattr(self.checkpointer, "db"):
                 from ..conversations import ConversationService
+
                 conversation_service = ConversationService(self.checkpointer.db)
-                
+
                 # Ensure conversation exists
                 existing_conv = await conversation_service.get_conversation(thread_id)
                 if not existing_conv:
                     await conversation_service.create_conversation(
                         thread_id=thread_id,
                         agent_name="backlog_assistant",
-                        title=existing_state.get("epic_input", "New Epic")[:50] + "..." if existing_state.get("epic_input") else "New Conversation"
+                        title=existing_state.get("epic_input", "New Epic")[:50] + "..."
+                        if existing_state.get("epic_input")
+                        else "New Conversation",
                     )
-                
+
                 # Store project_key in metadata if provided
                 if project_key:
                     await conversation_service.update_metadata(thread_id, {"project_key": project_key})
-                
+
                 # Add user message
-                await conversation_service.add_message(
-                    thread_id=thread_id,
-                    role="user",
-                    content=message
-                )
+                await conversation_service.add_message(thread_id=thread_id, role="user", content=message)
 
         # Run the graph
         final_state = None
@@ -341,17 +340,16 @@ class BacklogAssistantAgent:
         # Add assistant message to conversation
         if current_result and self.checkpointer and hasattr(self.checkpointer, "db"):
             from ..conversations import ConversationService
+
             conversation_service = ConversationService(self.checkpointer.db)
             await conversation_service.add_message(
-                thread_id=thread_id,
-                role="assistant",
-                content=current_result.summary
+                thread_id=thread_id, role="assistant", content=current_result.summary
             )
-            
+
             # Update title based on result summary if it's the first message
             if not existing_state.get("stories"):
-                 summary_title = current_result.summary.split('\n')[0][:50]
-                 await conversation_service.update_conversation_title(thread_id, summary_title)
+                summary_title = current_result.summary.split("\n")[0][:50]
+                await conversation_service.update_conversation_title(thread_id, summary_title)
 
         return response
 
@@ -450,6 +448,7 @@ class BacklogAssistantAgent:
             metadata = {}
             if hasattr(self.checkpointer, "db"):
                 from ..conversations import ConversationService
+
                 conversation_service = ConversationService(self.checkpointer.db)
                 conv = await conversation_service.get_conversation(thread_id)
                 if conv:
