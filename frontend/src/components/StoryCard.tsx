@@ -75,6 +75,15 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                 </div>
             </div>
 
+            {story.is_duplicate && (
+                <div className="mb-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3">
+                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-amber-200/80 italic">
+                        {story.duplicate_reason || "Potential overlap with an existing story in the backlog."}
+                    </div>
+                </div>
+            )}
+
             {/* Acceptance Criteria with Markdown Support */}
             <div className="space-y-2">
                 <h4 className="text-[10px] font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
@@ -135,10 +144,10 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                     )}
                     {story.business_value_score && story.effort_score && (
                         <div className={`px-3 py-1 rounded-full border text-[10px] font-bold flex items-center gap-1.5 ${(story.business_value_score / story.effort_score) >= 1.5
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                : (story.business_value_score / story.effort_score) >= 0.8
-                                    ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : (story.business_value_score / story.effort_score) >= 0.8
+                                ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                                : 'bg-red-500/10 border-red-500/30 text-red-400'
                             }`}>
                             <TrendingUp className="w-3 h-3" />
                             ROI: {Math.round((story.business_value_score / story.effort_score) * 10) / 10}

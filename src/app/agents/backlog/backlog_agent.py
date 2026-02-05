@@ -101,6 +101,30 @@ class BacklogAssistantAgent:
         self.graph = self._build_graph()
 
         logger.info(f"BacklogAssistantAgent initialized with features: {self.config.get_enabled_features()}")
+        
+    async def initialize(self) -> None:
+        """
+        Ensure all required infrastructure is ready.
+        Call this before using the agent for the first time.
+        """
+        logger.info("BacklogAssistantAgent: Initializing infrastructure...")
+        
+        # 1. Ensure RAG index exists if using Azure Search
+        from ...core.config import RAGBackend, settings
+        from ..vector_stores import VectorStoreFactory
+        
+        if settings.RAG_BACKEND == RAGBackend.AZURE_SEARCH:
+            try:
+                # We don't need a DB session yet just to check/create the index
+                store = VectorStoreFactory.get_store(None)
+                if hasattr(store, "create_index_if_not_exists"):
+                    await store.create_index_if_not_exists()
+            except Exception as e:
+                logger.error(f"BacklogAssistantAgent: Failed to initialize Azure Search index - {e}")
+                # We don't raise here to allow the agent to start in degraded mode if needed
+                # (e.g. if the user just wants to decompose without indexing)
+        
+        logger.info("BacklogAssistantAgent: Infrastructure initialization complete.")
 
     def _init_nodes(self) -> None:
         """Initialize all workflow nodes."""

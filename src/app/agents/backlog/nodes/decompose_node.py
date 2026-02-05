@@ -149,6 +149,10 @@ class DecomposeNode:
 
             logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
+            # 3. Detect duplicates for generated stories
+            if not self.config.USE_MOCKS:
+                await self._detect_duplicates(result.stories)
+
             return {
                 "stories": result.stories,
                 "current_result": result,
@@ -258,6 +262,50 @@ class DecomposeNode:
         except Exception as e:
             logger.warning(f"DecomposeNode: Failed to retrieve reference stories - {e}")
             return []
+
+    async def _detect_duplicates(self, stories: list[UserStory]) -> None:
+        """
+        Check each generated story for potential duplicates in Azure AI Search.
+        Updates the story objects in-place with is_duplicate and duplicate_reason.
+        """
+        logger.info(f"DecomposeNode: Performing duplicate detection for {len(stories)} stories")
+        try:
+            store = VectorStoreFactory.get_store(None)
+            if not self.llm_service:
+                self.llm_service = LLMService()
+
+            for story in stories:
+                # 1. Search for similar stories using hybrid search (Vector + Title)
+                query_vector = await self.llm_service.get_embeddings(story.description)
+                
+                # We use the title as search_text for better keyword matching
+                # and vector for semantic matching.
+                results = await store.similarity_search(
+                    query_vector, 
+                    k=1, 
+                    search_text=story.title
+                )
+
+                if results:
+                    top_match = results[0]
+                    score = top_match.get("score", 0)
+                    
+                    # Threshold for considering it a "Potential Duplicate"
+                    # Azure Search @search.score varies by index, but vector similarity 
+                    # is usually higher for duplicates.
+                    # We'll use a conservative threshold for now.
+                    if score > 0.03: # Adjusted for Azure Search scores (standard hybrid scores)
+                        story.is_duplicate = True
+                        match_title = top_match.get("metadata", {}).get("title", "Existing Story")
+                        match_id = top_match.get("metadata", {}).get("story_id", "Unknown")
+                        story.duplicate_reason = (
+                            f"Potential overlap with existing story: [{match_id}] {match_title}. "
+                            f"(Match Score: {score:.4f})"
+                        )
+                        logger.info(f"DecomposeNode: story {story.id} flagged as duplicate of {match_id}")
+
+        except Exception as e:
+            logger.warning(f"DecomposeNode: Duplicate detection failed - {e}")
 
 
 # Convenience function for standalone testing

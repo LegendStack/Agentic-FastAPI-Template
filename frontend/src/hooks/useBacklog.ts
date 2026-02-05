@@ -23,6 +23,8 @@ export interface UserStory {
     business_value_score?: number;
     effort_score?: number;
     tags: string[];
+    is_duplicate?: boolean;
+    duplicate_reason?: string;
 }
 
 export interface Message {

@@ -24,6 +24,7 @@ class AzureAISearchStore(BaseVectorStore):
         self.index_name = index_name
         self.embedding_dimension = embedding_dimension
         self._client = None
+        self._index_client = None
 
     async def _get_client(self):
         """Lazy initialization of the Azure Search client."""
@@ -42,6 +43,95 @@ class AzureAISearchStore(BaseVectorStore):
                 )
         return self._client
 
+    async def _get_index_client(self):
+        """Lazy initialization of the Azure Search Index client."""
+        if self._index_client is None:
+            try:
+                from azure.core.credentials import AzureKeyCredential
+                from azure.search.documents.indexes.aio import SearchIndexClient
+
+                self._index_client = SearchIndexClient(
+                    endpoint=self.endpoint, credential=AzureKeyCredential(self.api_key)
+                )
+            except ImportError:
+                raise ImportError(
+                    "azure-search-documents is required for Azure AI Search. "
+                    "Install with: pip install azure-search-documents"
+                )
+        return self._index_client
+
+    async def create_index_if_not_exists(self):
+        """Create the search index if it doesn't exist."""
+        index_client = await self._get_index_client()
+        
+        try:
+            # Check if index exists
+            indices = []
+            async for index in index_client.list_indexes():
+                indices.append(index.name)
+            
+            if self.index_name in indices:
+                logger.info(f"AzureAISearch: Index '{self.index_name}' already exists.")
+                return
+
+            logger.info(f"AzureAISearch: Creating index '{self.index_name}'...")
+            
+            from azure.search.documents.indexes.models import (
+                SearchIndex,
+                SearchField,
+                SearchFieldDataType,
+                SimpleField,
+                SearchableField,
+                VectorSearch,
+                HnswAlgorithmConfiguration,
+                VectorSearchProfile,
+            )
+
+            # Define the fields
+            fields = [
+                SimpleField(name="id", type=SearchFieldDataType.String, key=True),
+                SearchableField(name="content", type=SearchFieldDataType.String, analyzer_name="en.microsoft"),
+                SearchField(
+                    name="contentVector",
+                    type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
+                    searchable=True,
+                    vector_search_dimensions=self.embedding_dimension,
+                    vector_search_profile_name="my-vector-profile",
+                ),
+                SimpleField(name="sourceId", type=SearchFieldDataType.String, filterable=True),
+                SimpleField(name="tenantId", type=SearchFieldDataType.String, filterable=True),
+                # Metadata as stringified JSON to keep it simple and flexible
+                SearchableField(name="metadata", type=SearchFieldDataType.String, filterable=True),
+            ]
+
+            # Vector search configuration
+            vector_search = VectorSearch(
+                algorithms=[
+                    HnswAlgorithmConfiguration(
+                        name="my-algorithms-config",
+                    )
+                ],
+                profiles=[
+                    VectorSearchProfile(
+                        name="my-vector-profile",
+                        algorithm_configuration_name="my-algorithms-config",
+                    )
+                ],
+            )
+
+            index = SearchIndex(
+                name=self.index_name,
+                fields=fields,
+                vector_search=vector_search
+            )
+
+            await index_client.create_index(index)
+            logger.info(f"AzureAISearch: Index '{self.index_name}' created successfully.")
+
+        except Exception as e:
+            logger.error(f"AzureAISearch: Error ensuring index exists - {e}")
+            raise
+
     async def add_documents(self, documents: list[dict[str, Any]], ids: list[str] | None = None) -> list[str]:
         """
         Add documents to the Azure AI Search index.
@@ -55,6 +145,9 @@ class AzureAISearchStore(BaseVectorStore):
             "tenant_id": "..."
         }
         """
+        # Ensure index exists first (Phase 13 fix)
+        await self.create_index_if_not_exists()
+        
         client = await self._get_client()
 
         search_docs = []
@@ -70,7 +163,7 @@ class AzureAISearchStore(BaseVectorStore):
                 "contentVector": doc["embedding"],
                 "sourceId": doc.get("source_id", ""),
                 "tenantId": doc.get("tenant_id", "default"),
-                "metadata": doc.get("metadata", {}),
+                "metadata": str(doc.get("metadata", {})), # Store as string for SearchableField
             }
             search_docs.append(search_doc)
 
@@ -80,12 +173,19 @@ class AzureAISearchStore(BaseVectorStore):
         return generated_ids
 
     async def similarity_search(
-        self, query_vector: list[float], k: int = 4, filters: dict[str, Any] | None = None
+        self, 
+        query_vector: list[float], 
+        k: int = 4, 
+        filters: dict[str, Any] | None = None,
+        search_text: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Perform vector similarity search with optional OData filtering.
         Supports hybrid search combining vector + keyword for better results.
         """
+        # Ensure index exists first (Phase 13 fix)
+        await self.create_index_if_not_exists()
+        
         client = await self._get_client()
 
         # Build OData filter for tenant isolation
@@ -104,15 +204,28 @@ class AzureAISearchStore(BaseVectorStore):
 
             vector_query = VectorizedQuery(vector=query_vector, k_nearest_neighbors=k, fields="contentVector")
 
-            results = await client.search(search_text=None, vector_queries=[vector_query], filter=filter_string, top=k)
+            results = await client.search(
+                search_text=search_text, 
+                vector_queries=[vector_query], 
+                filter=filter_string, 
+                top=k
+            )
 
             docs = []
             async for result in results:
+                # Parse metadata back from string if it looks like a dict
+                metadata_str = result.get("metadata", "{}")
+                try:
+                    import ast
+                    metadata = ast.literal_eval(metadata_str) if isinstance(metadata_str, str) else metadata_str
+                except Exception:
+                    metadata = {"raw": metadata_str}
+
                 docs.append(
                     {
                         "id": result["id"],
                         "content": result["content"],
-                        "metadata": result.get("metadata", {}),
+                        "metadata": metadata,
                         "source_id": result.get("sourceId"),
                         "score": result["@search.score"],
                     }
@@ -125,6 +238,9 @@ class AzureAISearchStore(BaseVectorStore):
 
     async def delete_documents(self, ids: list[str]) -> None:
         """Remove documents from the index by ID."""
+        # Ensure index exists first (Phase 13 fix)
+        await self.create_index_if_not_exists()
+        
         client = await self._get_client()
         documents = [{"id": doc_id} for doc_id in ids]
         await client.delete_documents(documents=documents)

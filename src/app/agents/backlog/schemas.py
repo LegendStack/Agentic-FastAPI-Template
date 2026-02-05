@@ -128,6 +128,8 @@ class UserStory(BaseModel):
         None,
         description="MoSCoW priority classification",
     )
+    is_duplicate: bool = Field(False, description="Whether this story potentially overlaps with an existing one")
+    duplicate_reason: str | None = Field(None, description="Explanation for the potential duplicate flag")
 
     def to_markdown(self) -> str:
         """Format story as markdown for documentation."""
