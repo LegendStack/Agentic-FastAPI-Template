@@ -36,7 +36,16 @@ export const MessageList = ({ messages }: MessageListProps) => {
 
                         {/* Decorative tail - Only for assistant */}
                         {msg.role !== 'user' && (
-                            <div className="absolute top-0 w-4 h-4 -left-1 bg-bg-tertiary/50 border-l border-t border-border-primary -rotate-45 -z-10" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }} />
+                            <>
+                                <div className="absolute top-0 w-4 h-4 -left-1 bg-bg-tertiary/50 border-l border-t border-border-primary -rotate-45 -z-10" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }} />
+                                {(msg.input_tokens || msg.output_tokens) && (
+                                    <div className="mt-2 pt-2 border-t border-border-primary/50 flex justify-end">
+                                        <div className="text-[10px] text-text-tertiary font-mono">
+                                            {msg.input_tokens || 0} in / {msg.output_tokens || 0} out
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </motion.div>

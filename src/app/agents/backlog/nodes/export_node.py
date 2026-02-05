@@ -170,11 +170,19 @@ class ExportNode:
 
         status = "success" if not errors else "partial_success" if created_issues else "error"
 
+        # Update stories in-place with Jira info if successful
+        jira_lookup = {issue["internal_id"]: issue for issue in created_issues}
+        for story in result.stories:
+            if story.id in jira_lookup:
+                story.jira_key = jira_lookup[story.id]["jira_key"]
+                story.jira_url = jira_lookup[story.id]["url"]
+
         return {
             "status": status,
             "message": f"Created {len(created_issues)} of {len(result.stories)} issues",
             "issues": created_issues,
             "errors": errors if errors else None,
+            "stories": result.stories, # Pass updated stories back
         }
 
     async def _create_jira_issue(

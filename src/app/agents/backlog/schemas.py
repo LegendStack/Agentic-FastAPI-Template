@@ -130,6 +130,8 @@ class UserStory(BaseModel):
     )
     is_duplicate: bool = Field(False, description="Whether this story potentially overlaps with an existing one")
     duplicate_reason: str | None = Field(None, description="Explanation for the potential duplicate flag")
+    jira_key: str | None = Field(None, description="Associated JIRA issue key")
+    jira_url: str | None = Field(None, description="Link to the JIRA issue")
 
     def to_markdown(self) -> str:
         """Format story as markdown for documentation."""

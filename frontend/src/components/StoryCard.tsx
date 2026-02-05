@@ -3,12 +3,12 @@ import {
     Trash2,
     Zap,
     Hash,
-    ArrowRightLeft,
     CheckCircle2,
     Copy,
     Check,
     TrendingUp,
-    ShieldAlert
+    ShieldAlert,
+    ExternalLink
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { UserStory } from '../hooks/useBacklog';
@@ -47,6 +47,18 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                 <div className="flex-1">
                     <div className="flex items-baseline gap-2 mb-1">
                         <span className="text-xs font-mono text-accent-primary uppercase tracking-tighter whitespace-nowrap shrink-0">{story.id}</span>
+                        {story.jira_key && (
+                            <a
+                                href={story.jira_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-[10px] text-accent-primary hover:bg-accent-primary/20 transition-all ml-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                                {story.jira_key}
+                            </a>
+                        )}
                         <textarea
                             value={story.title}
                             onChange={(e) => onUpdate({ ...story, title: e.target.value })}

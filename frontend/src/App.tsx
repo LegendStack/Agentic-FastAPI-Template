@@ -39,7 +39,8 @@ const Dashboard = () => {
     currentThreadId,
     loadThread,
     recommendations,
-    reset
+    reset,
+    jiraBaseUrl
   } = useBacklog();
 
   const handleSelectThread = async (threadId: string) => {
@@ -140,7 +141,16 @@ const Dashboard = () => {
                   <Sparkles className="w-4 h-4 text-accent-primary" />
                   {selectedProject && (
                     <span className="ml-2 px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
-                      {selectedProject}
+                      {jiraBaseUrl ? (
+                        <a
+                          href={`${jiraBaseUrl}/projects/${selectedProject}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline"
+                        >
+                          {selectedProject}
+                        </a>
+                      ) : selectedProject}
                     </span>
                   )}
                 </h2>
@@ -209,6 +219,7 @@ const Dashboard = () => {
                 versions={versions}
                 activeVersionId={activeVersionId}
                 projectName={selectedProject}
+                jiraBaseUrl={jiraBaseUrl}
                 onLoadVersion={loadVersion}
                 onUpdateStory={updateStoryLocally}
                 onDeleteStory={deleteStory}

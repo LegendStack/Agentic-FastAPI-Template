@@ -9,6 +9,7 @@ interface ArtifactBoardProps {
     versions: ArtifactVersion[];
     activeVersionId: string | null;
     projectName?: string | null;
+    jiraBaseUrl?: string | null;
     onLoadVersion: (id: string) => void;
     onUpdateStory: (story: UserStory) => void;
     onDeleteStory: (id: string) => void;
@@ -20,6 +21,7 @@ export const ArtifactBoard = ({
     versions,
     activeVersionId,
     projectName,
+    jiraBaseUrl,
     onLoadVersion,
     onUpdateStory,
     onDeleteStory,
@@ -38,8 +40,17 @@ export const ArtifactBoard = ({
                         <h3 className="font-bold text-text-primary leading-none flex items-center gap-2">
                             Backlog Artifact
                             {projectName && (
-                                <span className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[8px] uppercase tracking-tighter text-accent-primary">
-                                    {projectName}
+                                <span className="ml-1 px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[8px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
+                                    {jiraBaseUrl ? (
+                                        <a
+                                            href={`${jiraBaseUrl}/projects/${projectName}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="hover:underline flex items-center gap-1"
+                                        >
+                                            {projectName}
+                                        </a>
+                                    ) : projectName}
                                 </span>
                             )}
                         </h3>

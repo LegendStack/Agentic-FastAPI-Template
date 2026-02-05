@@ -96,6 +96,8 @@ class DecomposeResponse(BaseModel):
     formatted_output: str | None = None
     recommendations: list[str] = []
     error: str | None = None
+    usage: dict[str, Any] | None = None
+    jira_base_url: str | None = None
 
 
 class RefineRequest(BaseModel):
@@ -179,32 +181,47 @@ async def decompose_epic(
         USE_MOCKS=False,  # Explicitly disable mocks for the real endpoint
     )
 
-    agent = get_agent(db, config)
+    try:
+        agent = get_agent(db)
+        result = await agent.decompose(
+            epic_description=request.epic_description,
+            context=request.context,
+            output_format=request.output_format,
+            project_key=project_key,
+        )
 
-    result = await agent.decompose(
-        epic_description=request.epic_description,
-        context=request.context,
-        output_format=request.output_format,
-        project_key=project_key,
-    )
+        if result.get("error"):
+            return DecomposeResponse(
+                thread_id=result["thread_id"],
+                story_count=0,
+                summary=None,
+                output_format=request.output_format,
+                stories=[],
+                error=result["error"],
+            )
 
-    if result.get("error"):
-        raise HTTPException(status_code=400, detail=result["error"])
+        # Extract recommendations from full response
+        full_response = result.get("response", {})
+        recommendations = full_response.get("recommendations", []) if full_response else []
 
-    # Extract recommendations from full response
-    full_response = result.get("response", {})
-    recommendations = full_response.get("recommendations", []) if full_response else []
-
-    return DecomposeResponse(
-        thread_id=result["thread_id"],
-        story_count=result.get("story_count", 0),
-        summary=result.get("summary"),
-        output_format=result.get("output_format", "json"),
-        stories=result.get("stories", []),
-        formatted_output=result.get("formatted_output"),
-        recommendations=recommendations,
-        error=result.get("error"),
-    )
+        from ...core.config import settings
+        
+        return DecomposeResponse(
+            thread_id=result["thread_id"],
+            story_count=result.get("story_count", 0),
+            summary=result.get("summary"),
+            output_format=result.get("output_format", "json"),
+            stories=result.get("stories", []),
+            formatted_output=result.get("formatted_output"),
+            recommendations=recommendations,
+            error=result.get("error"),
+            usage=result.get("usage"),
+            jira_base_url=settings.JIRA_URL,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug Error Decompose: {str(e)}")
 
 
 @router.post("/chat/{thread_id}", response_model=DecomposeResponse)
@@ -251,6 +268,7 @@ async def refine_decomposition(
         formatted_output=result.get("formatted_output"),
         recommendations=recommendations,
         error=result.get("error"),
+        usage=result.get("usage"),
     )
 
 
@@ -267,24 +285,67 @@ async def get_stories(
     Returns all stories and the full decomposition result.
     If checkpoint_id is provided, returns that specific version.
     """
-    agent = get_agent(db)
-    
-    if checkpoint_id:
-        result = await agent.get_stories_at_version(thread_id, checkpoint_id)
-    else:
-        result = await agent.get_stories(thread_id)
+    try:
+        agent = get_agent(db)
+        
+        if checkpoint_id:
+            result = await agent.get_stories_at_version(thread_id, checkpoint_id)
+        else:
+            result = await agent.get_stories(thread_id)
 
-    if result.get("error"):
-        raise HTTPException(status_code=404, detail=result["error"])
+        if result.get("error"):
+            raise HTTPException(status_code=404, detail=result["error"])
 
-    # Format output if markdown requested
-    if output_format == "markdown" and result.get("result"):
-        from ...agents.backlog.schemas import DecompositionResult
+        # Format output if markdown requested
+        if output_format == "markdown" and result.get("result"):
+            from ...agents.backlog.schemas import DecompositionResult
 
-        decomp = DecompositionResult.model_validate(result["result"])
-        result["formatted_output"] = decomp.to_markdown()
+            decomp = DecompositionResult.model_validate(result["result"])
+            result["formatted_output"] = decomp.to_markdown()
 
-    return result
+        # Fetch rich message history from DB if available
+        messages = []
+        if hasattr(agent.checkpointer, "db"):
+            try:
+                from ...agents.conversations import ConversationService
+                
+                conversation_service = ConversationService(agent.checkpointer.db)
+                db_messages = await conversation_service.get_messages(thread_id, limit=50)
+                
+                # Convert DB messages to dicts
+                messages = [
+                    {
+                        "id": str(m.id),
+                        "role": m.role,
+                        "content": m.content,
+                        "timestamp": m.created_at.timestamp() * 1000,
+                        "input_tokens": m.input_tokens,
+                        "output_tokens": m.output_tokens,
+                    }
+                    for m in db_messages
+                ]
+            except Exception as e:
+                # Log error but fallback to simple state
+                print(f"Error fetching DB messages: {e}")
+                messages = []
+        
+        # Fallback to state messages if DB is empty (e.g. non-persistent mode)
+        if not messages and result.get("messages"):
+            messages = result.get("messages", [])
+
+        # Return combined result
+        # Note: stories and result are already processed (model_dumped) by agent.get_stories if needed
+        return {
+            "thread_id": thread_id,
+            "stories": result.get("stories", []),
+            "result": result.get("result"),
+            "messages": messages,
+            "metadata": result.get("metadata", {}),
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug Error: {str(e)}")
 
 
 @router.get("/history/{thread_id}")
@@ -369,6 +430,7 @@ async def refine_existing_stories(
         formatted_output=result.get("formatted_output"),
         recommendations=recommendations,
         error=result.get("error"),
+        usage=result.get("usage"),
     )
 
 

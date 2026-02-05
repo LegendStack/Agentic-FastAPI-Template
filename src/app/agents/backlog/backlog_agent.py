@@ -373,6 +373,7 @@ class BacklogAssistantAgent:
                     "enabled_features": self.config.get_enabled_features(),
                 },
             },
+            "usage": final_state.get("usage_metadata"),
         }
 
         # Add assistant message to conversation
@@ -451,6 +452,28 @@ class BacklogAssistantAgent:
 
         # Run save node
         save_result = await self.save_node(state)
+        
+        # Update state with Jira info if successful
+        if save_result.get("stories") and self.checkpointer:
+            new_state = {**state, "stories": save_result["stories"]}
+            await self.graph.aupdate_state(config, new_state)
+            
+            # Post links back to conversation
+            if hasattr(self.checkpointer, "db"):
+                from ..conversations import ConversationService
+                conversation_service = ConversationService(self.checkpointer.db)
+                
+                issues = save_result.get("export_result", {}).get("issues", [])
+                if issues:
+                    links_text = "🚀 **JIRA issues saved successfully!**\n\n"
+                    for issue in issues:
+                        links_text += f"- [{issue['jira_key']}]({issue['url']})\n"
+                    
+                    await conversation_service.add_message(
+                        thread_id=thread_id,
+                        role="assistant",
+                        content=links_text
+                    )
 
         return {
             "thread_id": thread_id,

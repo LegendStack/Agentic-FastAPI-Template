@@ -25,6 +25,8 @@ export interface UserStory {
     tags: string[];
     is_duplicate?: boolean;
     duplicate_reason?: string;
+    jira_key?: string;
+    jira_url?: string;
 }
 
 export interface Message {
@@ -32,6 +34,8 @@ export interface Message {
     role: 'user' | 'assistant';
     content: string;
     timestamp: number;
+    input_tokens?: number;
+    output_tokens?: number;
 }
 
 export interface ArtifactVersion {
@@ -42,11 +46,24 @@ export interface ArtifactVersion {
     is_refinement: boolean;
 }
 
+export interface DecomposeResponse {
+    thread_id: string;
+    stories: UserStory[];
+    summary: string | null;
+    recommendations?: string[];
+    error?: string;
+    usage?: any;
+    jira_base_url?: string;
+    messages?: any[];
+    metadata?: any;
+}
+
 export const useBacklog = (initialThreadId?: string) => {
     const [stories, setStories] = useState<UserStory[]>([]);
     const [messages, setMessages] = useState<Message[]>([]);
     const [versions, setVersions] = useState<ArtifactVersion[]>([]);
     const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+    const [jiraBaseUrl, setJiraBaseUrl] = useState<string | null>(null);
     const [recommendations, setRecommendations] = useState<string[]>([]);
     const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(initialThreadId);
     const { selectedProject } = useProjectContext();
@@ -58,7 +75,7 @@ export const useBacklog = (initialThreadId?: string) => {
         if (urlThreadId && !currentThreadId) {
             loadThread(urlThreadId);
         }
-    }, []);
+    }, [currentThreadId]);
 
     // Sync URL when thread changes
     useEffect(() => {
@@ -116,7 +133,7 @@ export const useBacklog = (initialThreadId?: string) => {
             try {
                 if (!activeThreadId) {
                     // FIRST MESSAGE: Use the /decompose endpoint which generates the ID
-                    response = await api.post(`/backlog/decompose`, {
+                    response = await api.post<DecomposeResponse>('/backlog/decompose', {
                         epic_description: message,
                         output_format: 'json'
                     }, {
@@ -124,7 +141,7 @@ export const useBacklog = (initialThreadId?: string) => {
                     });
                 } else {
                     // SUBSEQUENT MESSAGES: Use /chat/{thread_id}
-                    response = await api.post(`/backlog/chat/${activeThreadId}`, {
+                    response = await api.post<DecomposeResponse>(`/backlog/chat/${activeThreadId}`, {
                         message,
                         stories: localStories,
                         output_format: 'json',
@@ -138,7 +155,9 @@ export const useBacklog = (initialThreadId?: string) => {
                     id: `msg-${Date.now() + 1}`,
                     role: 'assistant',
                     content: response.data.summary || (activeThreadId ? "Refinement complete." : "Decomposition complete."),
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    input_tokens: response.data.usage?.input_tokens,
+                    output_tokens: response.data.usage?.output_tokens
                 };
                 setMessages(prev => [...prev, assistantMsg]);
 
@@ -150,9 +169,13 @@ export const useBacklog = (initialThreadId?: string) => {
                     setActiveVersionId(null); // Reset to "Latest"
                 }
 
+                if (response.data.jira_base_url) {
+                    setJiraBaseUrl(response.data.jira_base_url);
+                }
+
                 return response.data;
             } catch (err: any) {
-                console.error(`[BacklogHook] API Error:`, err.response?.data || err.message);
+                console.error(`[BacklogHook] API Error: `, err.response?.data || err.message);
                 throw err;
             }
         },
@@ -171,23 +194,26 @@ export const useBacklog = (initialThreadId?: string) => {
         setCurrentThreadId(threadId);
         fetchVersions(threadId);
         try {
-            const response = await api.get(`/backlog/stories/${threadId}`);
+            const response = await api.get<DecomposeResponse>(`/backlog/stories/${threadId}`);
             if (response.data.stories) {
                 setStories(response.data.stories);
             }
             if (response.data.recommendations) {
                 setRecommendations(response.data.recommendations);
             }
+            if (response.data.jira_base_url) {
+                setJiraBaseUrl(response.data.jira_base_url);
+            }
 
             // Use messages from backend if provided (Phase 23 fix)
-            if (response.data.messages && response.data.messages.length > 0) {
-                setMessages(response.data.messages);
-            } else if (response.data.metadata?.epic_description) {
+            if (response.data.messages && (response.data.messages as any).length > 0) {
+                setMessages(response.data.messages as any);
+            } else if ((response.data as any).metadata?.epic_description) {
                 // Fallback for older threads or if messages missing
                 const epicMsg: Message = {
                     id: 'msg-initial-epic',
                     role: 'user',
-                    content: response.data.metadata.epic_description,
+                    content: (response.data as any).metadata.epic_description,
                     timestamp: 0
                 };
                 const assistMsg: Message = {
@@ -200,8 +226,8 @@ export const useBacklog = (initialThreadId?: string) => {
             }
 
             // Auto-select project from metadata (Feature A)
-            if (response.data.metadata?.project_key) {
-                console.log(`[BacklogHook] Auto-selecting project: ${response.data.metadata.project_key}`);
+            if ((response.data as any).metadata?.project_key) {
+                console.log(`[BacklogHook] Auto-selecting project: ${(response.data as any).metadata.project_key}`);
             }
             return response.data;
         } catch (err) {
@@ -235,9 +261,9 @@ export const useBacklog = (initialThreadId?: string) => {
         loadThread,
         updateStoryLocally,
         reset,
+        jiraBaseUrl,
         isProcessing: chatMutation.isPending,
         sendMessage: chatMutation.mutate,
         error: chatMutation.error,
     };
 };
-
