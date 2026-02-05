@@ -3,6 +3,8 @@ import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider, AuthenticatedTemplate, UnauthenticatedTemplate, useMsal } from '@azure/msal-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { msalConfig, loginRequest } from './authConfig';
+import { ThemeProvider } from './contexts/ThemeProvider';
+import { ThemeToggle } from './components/ThemeToggle';
 import { ProjectProvider, useProjectContext } from './hooks/useProjectContext';
 import { ProjectSelector } from './components/ProjectSelector';
 import { OracleDrawer } from './components/OracleDrawer';
@@ -64,18 +66,21 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="flex h-screen bg-brand-navy overflow-hidden">
+    <div className="flex h-screen bg-bg-primary overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
-      <aside className="w-72 border-r border-slate-700/50 flex flex-col glass z-10 shrink-0">
-        <div className="p-6 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-brand-blue bg-opacity-20">
-            <Layers className="w-6 h-6 neon-text" />
+      <aside className="w-72 border-r border-border-primary flex flex-col glass z-10 shrink-0">
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-brand-blue bg-opacity-20">
+              <Layers className="w-6 h-6 neon-text" />
+            </div>
+            <span className="font-bold text-xl text-text-primary tracking-tighter">BACKLOG.AI</span>
           </div>
-          <span className="font-bold text-xl text-white tracking-tighter">BACKLOG.AI</span>
+          <ThemeToggle />
         </div>
 
 
-        <div className="flex-1 overflow-hidden flex flex-col border-t border-slate-700/30 mt-4">
+        <div className="flex-1 overflow-hidden flex flex-col border-t border-border-primary mt-4">
           <ConversationHistory
             onSelectThread={handleSelectThread}
             onNewConversation={handleNewConversation}
@@ -83,29 +88,29 @@ const Dashboard = () => {
           />
         </div>
 
-        <div className="px-4 mb-4 mt-auto pt-4 border-t border-slate-700/30">
+        <div className="px-4 mb-4 mt-auto pt-4 border-t border-border-primary">
           <button
             onClick={() => setProject(null)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-slate-400 hover:text-brand-blue hover:bg-brand-blue/10 border border-slate-700/50 hover:border-brand-blue/30"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-text-secondary hover:text-accent-primary hover:bg-accent-primary/10 border border-border-primary hover:border-accent-primary/30"
           >
             <LayoutDashboard className="w-5 h-5" />
             <span className="text-sm font-semibold">Change Project</span>
           </button>
         </div>
 
-        <div className="p-4 border-t border-slate-700/50 m-4 rounded-2xl glass">
+        <div className="p-4 border-t border-border-primary m-4 rounded-2xl glass">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs text-white">
+            <div className="w-8 h-8 rounded-full bg-bg-tertiary flex items-center justify-center text-xs text-text-primary">
               <User className="w-4 h-4" />
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-xs font-bold text-white truncate">{accounts[0]?.name || 'User'}</p>
-              <p className="text-[10px] text-slate-500 truncate">{accounts[0]?.username}</p>
+              <p className="text-xs font-bold text-text-primary truncate">{accounts[0]?.name || 'User'}</p>
+              <p className="text-[10px] text-text-secondary truncate">{accounts[0]?.username}</p>
             </div>
           </div>
           <button
             onClick={() => instance.logoutRedirect()}
-            className="w-full mt-2 py-2 flex items-center justify-center gap-2 text-[10px] text-slate-500 hover:text-red-400 transition-colors"
+            className="w-full mt-2 py-2 flex items-center justify-center gap-2 text-[10px] text-text-secondary hover:text-red-400 transition-colors"
           >
             <LogOut className="w-3 h-3" /> Sign Out
           </button>
@@ -117,15 +122,15 @@ const Dashboard = () => {
         <PanelGroup orientation="horizontal">
           {/* Chat Pane (Left) */}
           <Panel defaultSize={40} minSize={25}>
-            <main className="h-full flex flex-col border-r border-slate-700/30 bg-brand-navy/20 relative">
-              <header className="px-8 py-6 flex items-center justify-between border-b border-slate-700/30 shrink-0">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <main className="h-full flex flex-col border-r border-border-primary bg-bg-secondary/20 relative">
+              <header className="px-8 py-6 flex items-center justify-between border-b border-border-primary shrink-0">
+                <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
                   Refinement
-                  <Sparkles className="w-4 h-4 text-brand-blue" />
+                  <Sparkles className="w-4 h-4 text-accent-primary" />
                 </h2>
                 <button
                   onClick={handleNewConversation}
-                  className="text-[10px] font-bold text-slate-500 hover:text-white transition-colors"
+                  className="text-[10px] font-bold text-text-secondary hover:text-text-primary transition-colors"
                 >
                   Reset
                 </button>
@@ -135,14 +140,14 @@ const Dashboard = () => {
                 <MessageList messages={messages} />
                 {isProcessing && (
                   <div className="px-12 py-4 flex gap-4">
-                    <div className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700">
-                      <Sparkles className="w-4 h-4 text-brand-blue animate-spin" />
+                    <div className="w-8 h-8 rounded-xl bg-bg-tertiary flex items-center justify-center shrink-0 border border-border-primary">
+                      <Sparkles className="w-4 h-4 text-accent-primary animate-spin" />
                     </div>
-                    <div className="bg-slate-800/20 px-6 py-4 rounded-2xl border border-slate-700/50">
+                    <div className="bg-bg-tertiary/50 px-6 py-4 rounded-2xl border border-border-primary">
                       <div className="flex gap-1">
-                        <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <div className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce" />
+                        <div className="w-1.5 h-1.5 bg-accent-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1.5 h-1.5 bg-accent-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1.5 h-1.5 bg-accent-primary rounded-full animate-bounce" />
                       </div>
                     </div>
                   </div>
@@ -157,8 +162,8 @@ const Dashboard = () => {
             </main>
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-slate-800/50 hover:bg-brand-blue/50 transition-colors cursor-col-resize flex items-center justify-center group relative">
-            <div className="w-px h-8 bg-slate-700 group-hover:bg-brand-blue/50" />
+          <PanelResizeHandle className="w-1 bg-border-primary hover:bg-accent-primary/50 transition-colors cursor-col-resize flex items-center justify-center group relative">
+            <div className="w-px h-8 bg-text-tertiary group-hover:bg-accent-primary/50" />
             <div className="absolute -inset-x-2 h-full cursor-col-resize z-50" />
           </PanelResizeHandle>
 
@@ -251,7 +256,9 @@ function App() {
     <MsalProvider instance={msalInstance}>
       <QueryClientProvider client={queryClient}>
         <ProjectProvider>
-          <AuthWrapper />
+          <ThemeProvider>
+            <AuthWrapper />
+          </ThemeProvider>
         </ProjectProvider>
       </QueryClientProvider>
     </MsalProvider>

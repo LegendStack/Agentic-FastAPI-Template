@@ -19,31 +19,30 @@ export const MessageList = ({ messages }: MessageListProps) => {
                     transition={{ delay: idx * 0.1 }}
                     className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                 >
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-brand-blue/20 text-brand-blue border border-brand-blue/30' : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-accent-primary/20 text-accent-primary' : 'bg-bg-tertiary text-text-secondary border border-border-primary'
                         }`}>
                         {msg.role === 'user' ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                     </div>
 
                     <div className={`relative max-w-[80%] px-6 py-4 rounded-2xl transition-all shadow-xl backdrop-blur-md ${msg.role === 'user'
-                        ? 'bg-brand-blue/10 text-white border border-brand-blue/20 rounded-tr-none'
-                        : 'bg-slate-800/40 text-slate-300 border border-slate-700/50 rounded-tl-none'
+                        ? 'bg-accent-primary/10 text-text-primary rounded-tr-none'
+                        : 'bg-bg-tertiary/50 text-text-primary border border-border-primary rounded-tl-none'
                         }`}>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
 
-                        {/* Decorative tail */}
-                        <div className={`absolute top-0 w-4 h-4 ${msg.role === 'user'
-                            ? '-right-1 bg-brand-blue/10 border-r border-t border-brand-blue/20 rotate-45'
-                            : '-left-1 bg-slate-800/40 border-l border-t border-slate-700/50 -rotate-45'
-                            } -z-10`} style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }} />
+                        {/* Decorative tail - Only for assistant */}
+                        {msg.role !== 'user' && (
+                            <div className="absolute top-0 w-4 h-4 -left-1 bg-bg-tertiary/50 border-l border-t border-border-primary -rotate-45 -z-10" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }} />
+                        )}
                     </div>
                 </motion.div>
             ))}
 
             {/* Divider */}
             <div className="flex items-center gap-4 my-4 opacity-20">
-                <div className="h-px flex-1 bg-slate-700" />
-                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Generated Stories</span>
-                <div className="h-px flex-1 bg-slate-700" />
+                <div className="h-px flex-1 bg-border-primary" />
+                <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Generated Stories</span>
+                <div className="h-px flex-1 bg-border-primary" />
             </div>
         </div>
     );

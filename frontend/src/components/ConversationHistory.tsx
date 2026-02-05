@@ -140,10 +140,10 @@ export const ConversationHistory = ({
 
     return (
         <div className="flex flex-col h-full">
-            <div className="px-4 py-3 border-b border-slate-700/50">
+            <div className="px-4 py-3 border-b border-border-primary">
                 <button
                     onClick={onNewConversation}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-blue/10 hover:bg-brand-blue/20 border border-brand-blue/30 rounded-xl transition-all text-brand-blue font-semibold text-sm"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/30 rounded-xl transition-all text-accent-primary font-semibold text-sm"
                 >
                     <Plus className="w-4 h-4" />
                     New Chat
@@ -152,7 +152,7 @@ export const ConversationHistory = ({
 
             <div className="flex-1 overflow-y-auto px-2 py-3 custom-scrollbar">
                 {isLoading ? (
-                    <div className="px-4 py-8 text-center text-slate-500 text-sm">
+                    <div className="px-4 py-8 text-center text-text-secondary text-sm">
                         Loading history...
                     </div>
                 ) : data && data.length > 0 ? (
@@ -163,7 +163,7 @@ export const ConversationHistory = ({
 
                             return (
                                 <div key={group} className="mb-6 last:mb-2">
-                                    <h4 className="px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                    <h4 className="px-3 mb-2 text-[10px] font-bold text-text-tertiary uppercase tracking-widest">
                                         {group}
                                     </h4>
                                     {conversations.map((conv) => (
@@ -174,13 +174,13 @@ export const ConversationHistory = ({
                                             exit={{ opacity: 0, x: -10 }}
                                             onClick={() => onSelectThread(conv.thread_id)}
                                             className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg transition-all text-left mb-1 group/item cursor-pointer ${currentThreadId === conv.thread_id
-                                                ? 'bg-brand-blue/10 border border-brand-blue/30'
-                                                : 'hover:bg-slate-800/50 border border-transparent'
+                                                ? 'bg-accent-primary/10 border border-accent-primary/30'
+                                                : 'hover:bg-bg-tertiary border border-transparent'
                                                 }`}
                                         >
                                             <MessageSquare className={`w-4 h-4 mt-0.5 flex-shrink-0 ${currentThreadId === conv.thread_id
-                                                ? 'text-brand-blue'
-                                                : 'text-slate-500'
+                                                ? 'text-accent-primary'
+                                                : 'text-text-secondary'
                                                 }`} />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -191,34 +191,35 @@ export const ConversationHistory = ({
                                                                 type="text"
                                                                 value={editTitle}
                                                                 onChange={e => setEditTitle(e.target.value)}
+                                                                onChange={e => setEditTitle(e.target.value)}
                                                                 onKeyDown={e => e.key === 'Enter' && handleSaveEdit(e as any, conv.thread_id)}
-                                                                className="flex-1 bg-slate-900 border border-brand-blue/50 rounded px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-blue"
+                                                                className="flex-1 bg-bg-primary border border-accent-primary/50 rounded px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-accent-primary"
                                                             />
-                                                            <button onClick={e => handleSaveEdit(e, conv.thread_id)} className="p-1 hover:text-brand-blue text-slate-400">
+                                                            <button onClick={e => handleSaveEdit(e, conv.thread_id)} className="p-1 hover:text-accent-primary text-text-tertiary">
                                                                 <Check className="w-3 h-3" />
                                                             </button>
-                                                            <button onClick={e => { e.stopPropagation(); setEditingThreadId(null); }} className="p-1 hover:text-red-400 text-slate-400">
+                                                            <button onClick={e => { e.stopPropagation(); setEditingThreadId(null); }} className="p-1 hover:text-red-400 text-text-tertiary">
                                                                 <X className="w-3 h-3" />
                                                             </button>
                                                         </div>
                                                     ) : (
                                                         <>
                                                             <p className={`text-sm font-medium truncate ${currentThreadId === conv.thread_id
-                                                                ? 'text-brand-blue'
-                                                                : 'text-slate-300'
+                                                                ? 'text-accent-primary'
+                                                                : 'text-text-primary'
                                                                 }`}>
                                                                 {conv.title || 'Untitled Chat'}
                                                             </p>
                                                             <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                                 <button
                                                                     onClick={(e) => handleStartEdit(e, conv)}
-                                                                    className="p-1 hover:text-brand-blue text-slate-500 transition-colors"
+                                                                    className="p-1 hover:text-accent-primary text-text-tertiary transition-colors"
                                                                 >
                                                                     <Pencil className="w-3 h-3" />
                                                                 </button>
                                                                 <button
                                                                     onClick={(e) => handleDelete(e, conv.thread_id)}
-                                                                    className="p-1 hover:text-red-400 text-slate-500 transition-colors"
+                                                                    className="p-1 hover:text-red-400 text-text-tertiary transition-colors"
                                                                 >
                                                                     <Trash2 className="w-3 h-3" />
                                                                 </button>
@@ -226,12 +227,12 @@ export const ConversationHistory = ({
                                                         </>
                                                     )}
                                                     {conv.metadata?.project_key && !editingThreadId && (
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono border border-slate-700 flex-shrink-0">
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-bg-tertiary text-text-secondary font-mono border border-border-primary flex-shrink-0">
                                                             {conv.metadata.project_key}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                                <p className="text-[10px] text-text-secondary mt-0.5">
                                                     {formatRelativeTime(conv.updated_at || conv.created_at)}
                                                 </p>
                                             </div>
@@ -242,7 +243,7 @@ export const ConversationHistory = ({
                         })}
                     </AnimatePresence>
                 ) : (
-                    <div className="px-4 py-8 text-center text-slate-500 text-sm">
+                    <div className="px-4 py-8 text-center text-text-secondary text-sm">
                         No recent chats found.
                     </div>
                 )}
