@@ -146,3 +146,8 @@ src/.env
 # Don't ignore files inside of script folder:
 !scripts/*
 
+# Debug & Temporary files
+tests/debug_thread.py
+tests/*.txt
+tests/*.log
+
