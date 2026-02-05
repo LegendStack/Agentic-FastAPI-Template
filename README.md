@@ -90,7 +90,7 @@ cd agentic-fastapi-template && docker compose up
 
 ### 🤖 Agentic AI Framework
 - 🧠 LangGraph Orchestration with state management
-- 📚 RAG with pgvector or Azure AI Search
+- 📚 RAG with Redis, Azure AI Search, or pgvector
 - 🔗 Graph-RAG with Neo4j knowledge graphs
 - 🛡️ Safety Guardrails (PII, moderation)
 - ⚡ Semantic Caching (reduce LLM costs 70%+)

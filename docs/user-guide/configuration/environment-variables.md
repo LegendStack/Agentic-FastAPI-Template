@@ -111,6 +111,11 @@ REDIS_QUEUE_PORT=6379
 # ------------- redis rate limit -------------
 REDIS_RATE_LIMIT_HOST="localhost"  # Use "redis" for Docker Compose
 REDIS_RATE_LIMIT_PORT=6379
+
+# ------------- rag & vector store -------------
+RAG_BACKEND="redis"  # Options: "redis", "azure_search", "pgvector"
+REDIS_VECTOR_URL="redis://localhost:6379"
+REDIS_VECTOR_INDEX_NAME="agent-index"
 ```
 
 **Best Practices:**
