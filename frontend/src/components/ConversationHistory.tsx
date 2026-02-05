@@ -191,7 +191,6 @@ export const ConversationHistory = ({
                                                                 type="text"
                                                                 value={editTitle}
                                                                 onChange={e => setEditTitle(e.target.value)}
-                                                                onChange={e => setEditTitle(e.target.value)}
                                                                 onKeyDown={e => e.key === 'Enter' && handleSaveEdit(e as any, conv.thread_id)}
                                                                 className="flex-1 bg-bg-primary border border-accent-primary/50 rounded px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-accent-primary"
                                                             />
@@ -226,15 +225,17 @@ export const ConversationHistory = ({
                                                             </div>
                                                         </>
                                                     )}
+                                                </div>
+                                                <div className="flex items-center justify-between mt-0.5">
+                                                    <p className="text-[10px] text-text-secondary">
+                                                        {formatRelativeTime(conv.updated_at || conv.created_at)}
+                                                    </p>
                                                     {conv.metadata?.project_key && !editingThreadId && (
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-bg-tertiary text-text-secondary font-mono border border-border-primary flex-shrink-0">
+                                                        <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
                                                             {conv.metadata.project_key}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-[10px] text-text-secondary mt-0.5">
-                                                    {formatRelativeTime(conv.updated_at || conv.created_at)}
-                                                </p>
                                             </div>
                                         </motion.div>
                                     ))}
