@@ -4,10 +4,13 @@ import {
     Zap,
     Hash,
     ArrowRightLeft,
-    CheckCircle2
+    CheckCircle2,
+    Copy,
+    Check
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { UserStory } from '../hooks/useBacklog';
+import { useState } from 'react';
 
 interface StoryCardProps {
     story: UserStory;
@@ -16,6 +19,15 @@ interface StoryCardProps {
 }
 
 export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        const text = `**${story.id}: ${story.title}**\n\n${story.description}\n\n**Acceptance Criteria:**\n${story.acceptance_criteria.map(ac => typeof ac === 'string' ? `- ${ac}` : `- ${ac.description}`).join('\n')}`;
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     return (
         <motion.div
             layout
@@ -25,37 +37,38 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="glass-card p-6 border-accent-primary/5 flex flex-col gap-4 relative overflow-hidden group mb-4"
         >
-            {/* Refinement Indicator */}
-            <div className="absolute top-0 right-12 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRightLeft className="w-4 h-4 text-accent-primary/40" />
-            </div>
 
-            <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                    onClick={() => onDelete(story.id)}
-                    className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
-            </div>
-
-            <div className="flex items-start gap-4">
-                <div className="mt-1 p-2 rounded-lg bg-accent-primary/5 text-accent-primary">
-                    <Hash className="w-5 h-5" />
+            <div className="flex items-start gap-3">
+                <div className="mt-1 p-1.5 rounded-md bg-accent-primary/10 text-accent-primary">
+                    <Hash className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex-1">
                     <div className="flex items-baseline gap-2 mb-1">
-                        <span className="text-xs font-mono text-accent-primary uppercase tracking-tighter">{story.id}</span>
-                        <input
+                        <span className="text-xs font-mono text-accent-primary uppercase tracking-tighter whitespace-nowrap shrink-0">{story.id}</span>
+                        <textarea
                             value={story.title}
                             onChange={(e) => onUpdate({ ...story, title: e.target.value })}
-                            className="w-full bg-transparent border-none text-xl font-bold text-text-primary focus:ring-0 p-0 hover:bg-bg-tertiary/20 rounded transition-colors"
+                            className="w-full bg-transparent border-none text-base font-bold text-text-primary focus:ring-0 p-0 hover:bg-bg-tertiary/20 rounded transition-colors resize-none overflow-hidden h-auto"
+                            rows={1}
+                            style={{ height: 'auto', minHeight: '28px' }}
+                            onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = 'auto';
+                                target.style.height = `${target.scrollHeight}px`;
+                            }}
                         />
                     </div>
                     <textarea
                         value={story.description}
                         onChange={(e) => onUpdate({ ...story, description: e.target.value })}
-                        className="w-full bg-transparent border-none text-text-secondary focus:ring-0 p-0 resize-none hover:bg-bg-tertiary/20 rounded transition-colors min-h-[60px]"
+                        className="w-full bg-transparent border-none text-text-secondary focus:ring-0 p-0 resize-none hover:bg-bg-tertiary/20 rounded transition-colors min-h-[60px] overflow-hidden"
+                        rows={3}
+                        style={{ height: 'auto', minHeight: '60px' }}
+                        onInput={(e) => {
+                            const target = e.target as HTMLTextAreaElement;
+                            target.style.height = 'auto';
+                            target.style.height = `${target.scrollHeight}px`;
+                        }}
                     />
                 </div>
             </div>
@@ -105,23 +118,42 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                 </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-2">
-                {story.acceptance_criteria.length > 0 && (
-                    <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-bg-primary/80 border border-border-primary text-[10px] text-text-secondary">
-                        <Zap className="w-3 h-3 text-yellow-400" />
-                        {story.acceptance_criteria.length} Criteria
-                    </div>
-                )}
-                {story.estimated_complexity && (
-                    <div className="px-3 py-1 rounded-full bg-accent-primary/10 border border-accent-primary/30 text-[10px] text-accent-primary font-bold">
-                        SIZE: {story.estimated_complexity}
-                    </div>
-                )}
-                {story.tags.map(tag => (
-                    <div key={tag} className="px-3 py-1 rounded-full bg-bg-tertiary/50 border border-border-primary text-[10px] text-text-secondary">
-                        {tag}
-                    </div>
-                ))}
+            <div className="flex items-center justify-between pt-4 mt-2 border-t border-border-primary/20">
+                <div className="flex flex-wrap gap-2">
+                    {story.acceptance_criteria.length > 0 && (
+                        <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-bg-primary/80 border border-border-primary text-[10px] text-text-secondary">
+                            <Zap className="w-3 h-3 text-yellow-400" />
+                            {story.acceptance_criteria.length} Criteria
+                        </div>
+                    )}
+                    {story.estimated_complexity && (
+                        <div className="px-3 py-1 rounded-full bg-accent-primary/10 border border-accent-primary/30 text-[10px] text-accent-primary font-bold">
+                            SIZE: {story.estimated_complexity}
+                        </div>
+                    )}
+                    {story.tags.map(tag => (
+                        <div key={tag} className="px-3 py-1 rounded-full bg-bg-tertiary/50 border border-border-primary text-[10px] text-text-secondary">
+                            {tag}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-1 opacity-100 transition-opacity">
+                    <button
+                        onClick={handleCopy}
+                        className="p-2 rounded-lg hover:bg-bg-tertiary text-text-tertiary hover:text-accent-primary transition-colors"
+                        title="Copy story"
+                    >
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                    <button
+                        onClick={() => onDelete(story.id)}
+                        className="p-2 rounded-lg hover:bg-bg-tertiary text-text-tertiary hover:text-red-400 transition-colors"
+                        title="Delete story"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
         </motion.div>
     );

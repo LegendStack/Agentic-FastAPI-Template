@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
-import { User, Sparkles } from 'lucide-react';
+import { User, Sparkles, Copy, Check } from 'lucide-react';
 import type { Message } from '../hooks/useBacklog';
+import { useState } from 'react';
 
 interface MessageListProps {
     messages: Message[];
@@ -24,11 +25,14 @@ export const MessageList = ({ messages }: MessageListProps) => {
                         {msg.role === 'user' ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                     </div>
 
-                    <div className={`relative max-w-[80%] px-6 py-4 rounded-2xl transition-all shadow-xl backdrop-blur-md ${msg.role === 'user'
+                    <div className={`relative max-w-[80%] px-6 py-4 rounded-2xl transition-all shadow-xl backdrop-blur-md group ${msg.role === 'user'
                         ? 'bg-accent-primary/10 text-text-primary rounded-tr-none'
                         : 'bg-bg-tertiary/50 text-text-primary border border-border-primary rounded-tl-none'
                         }`}>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        <div className="relative">
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            <CopyButton content={msg.content} />
+                        </div>
 
                         {/* Decorative tail - Only for assistant */}
                         {msg.role !== 'user' && (
@@ -45,5 +49,25 @@ export const MessageList = ({ messages }: MessageListProps) => {
                 <div className="h-px flex-1 bg-border-primary" />
             </div>
         </div>
+    );
+};
+
+const CopyButton = ({ content }: { content: string }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        await navigator.clipboard.writeText(content);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <button
+            onClick={handleCopy}
+            className="absolute -top-1 -right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-bg-primary/50 text-text-tertiary hover:text-accent-primary hover:bg-bg-primary/80"
+            title="Copy to clipboard"
+        >
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+        </button>
     );
 };
