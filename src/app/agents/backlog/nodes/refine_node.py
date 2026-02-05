@@ -72,14 +72,16 @@ class RefineNode:
         try:
             if self.config.USE_MOCKS:
                 result = await self._mock_refine(current_result, feedback)
+                usage = {}
             else:
-                result = await self._llm_refine(current_result, feedback)
+                result, usage = await self._llm_refine(current_result, feedback)
 
             logger.info(f"RefineNode: Updated to {len(result.stories)} stories")
 
             return {
                 "stories": result.stories,
                 "current_result": result,
+                "usage_metadata": usage,
                 "refinement_feedback": None,  # Clear feedback after processing
                 "error": None,
             }
@@ -177,7 +179,7 @@ class RefineNode:
         self,
         current_result: DecompositionResult,
         feedback: str,
-    ) -> DecompositionResult:
+    ) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to refine the decomposition."""
         if not self.llm_service:
             self.llm_service = LLMService()
@@ -191,7 +193,7 @@ class RefineNode:
         user_prompt = get_refine_user_prompt(feedback, edit_context=edit_context)
 
         # Use structured output validator with retry
-        result = await self.validator.with_retry(
+        result_data, usage_metadata = await self.validator.with_retry(
             llm=self.llm_service,
             prompt=user_prompt,
             schema=DecompositionResult,
@@ -200,9 +202,9 @@ class RefineNode:
         )
 
         # Preserve the original epic
-        result.epic = current_result.epic
+        result_data.epic = current_result.epic
 
-        return result
+        return result_data, usage_metadata
 
 
 # Convenience function for standalone testing

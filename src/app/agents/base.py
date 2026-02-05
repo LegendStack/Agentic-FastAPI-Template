@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,16 @@ class AgentMessage(BaseModel):
     tool_call_id: str | None = None
     attachments: list[Attachment] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class BaseAgentState(TypedDict):
+    """
+    Base state interface for all agents.
+    Enforces standardized tracking of usage and metadata.
+    """
+
+    usage_metadata: dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class BaseVectorStore(ABC):

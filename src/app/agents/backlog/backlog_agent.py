@@ -341,8 +341,18 @@ class BacklogAssistantAgent:
             from ..conversations import ConversationService
 
             conversation_service = ConversationService(self.checkpointer.db)
+            
+            # Extract token counts
+            usage = final_state.get("usage_metadata") or {}
+            input_tokens = usage.get("input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
+
             await conversation_service.add_message(
-                thread_id=thread_id, role="assistant", content=current_result.summary
+                thread_id=thread_id, 
+                role="assistant", 
+                content=current_result.summary,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
             # Update title based on result summary if it's the first message

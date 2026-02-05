@@ -9,10 +9,11 @@ from typing import Any
 
 from typing_extensions import TypedDict
 
+from ...agents.base import BaseAgentState
 from .schemas import DecompositionResult, Epic, UserStory
 
 
-class BacklogAgentState(TypedDict):
+class BacklogAgentState(BaseAgentState):
     """
     The state object that flows through the Backlog Assistant graph.
 
@@ -30,7 +31,10 @@ class BacklogAgentState(TypedDict):
         tenant_id: Multi-tenant isolation identifier
         project_key: JIRA project key associated with this thread
         error: Error message if something failed
-        metadata: Arbitrary metadata for extensibility
+        manual_edits_detected: Whether user manually edited stories
+        edit_context: Context of manual edits
+        usage_metadata: (Inherited) Token usage data
+        metadata: (Inherited) Extensibility
     """
 
     # Core conversation
@@ -65,6 +69,3 @@ class BacklogAgentState(TypedDict):
     # Edit awareness
     manual_edits_detected: bool
     edit_context: str | None
-
-    # Extensibility
-    metadata: dict[str, Any]

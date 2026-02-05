@@ -83,7 +83,7 @@ export const ConversationHistory = ({
             const response = await api.get('/agents/conversations', {
                 params: { agent_name: 'backlog_assistant', limit: 50 },
             });
-            return response.data.conversations as Conversation[];
+            return (response.data.conversations || []) as Conversation[];
         },
         refetchInterval: 30000,
     });

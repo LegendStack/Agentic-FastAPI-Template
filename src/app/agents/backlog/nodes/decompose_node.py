@@ -127,18 +127,20 @@ class DecomposeNode:
         try:
             if self.config.USE_MOCKS:
                 result = await self._mock_decompose(parsed_epic)
+                usage = {}
             else:
                 # 1. Retrieve similar stories for context (Phase 13)
                 reference_stories = await self._retrieve_reference_stories(parsed_epic)
                 
                 # 2. LLM Decomposition with context
-                result = await self._llm_decompose(parsed_epic, reference_stories=reference_stories)
+                result, usage = await self._llm_decompose(parsed_epic, reference_stories=reference_stories)
 
             logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
             return {
                 "stories": result.stories,
                 "current_result": result,
+                "usage_metadata": usage,
                 "is_first_message": False,  # After decomposition, next message is refinement
                 "error": None,
             }
@@ -152,7 +154,7 @@ class DecomposeNode:
         logger.info("DecomposeNode: Using mock decomposition")
         return MockDecomposeResult.generate(epic, self.config)
 
-    async def _llm_decompose(self, epic: Epic, reference_stories: list[UserStory] | None = None) -> DecompositionResult:
+    async def _llm_decompose(self, epic: Epic, reference_stories: list[UserStory] | None = None) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to decompose the epic."""
         if not self.llm_service:
             self.llm_service = LLMService()
@@ -189,7 +191,7 @@ class DecomposeNode:
         )
 
         # Use structured output validator with retry
-        result = await self.validator.with_retry(
+        result_data, usage_metadata = await self.validator.with_retry(
             llm=self.llm_service,
             prompt=user_prompt,
             schema=DecompositionResult,
@@ -198,9 +200,9 @@ class DecomposeNode:
         )
 
         # Ensure epic is set correctly
-        result.epic = epic
+        result_data.epic = epic
 
-        return result
+        return result_data, usage_metadata
 
     async def _retrieve_reference_stories(self, epic: Epic) -> list[UserStory]:
         """Retrieve similar stories from Azure AI Search."""
