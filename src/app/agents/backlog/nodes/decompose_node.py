@@ -40,6 +40,8 @@ class MockDecomposeResult:
                 edge_cases=["Handle missing configuration gracefully"] if config.ENABLE_EDGE_CASES else [],
                 technical_notes=["Consider using existing patterns"] if config.ENABLE_TECH_TASKS else [],
                 estimated_complexity="M" if config.ENABLE_COMPLEXITY_ESTIMATION else None,
+                business_value_score=50,
+                effort_score=50,
                 tags=["setup", "infrastructure"],
             ),
             UserStory(
@@ -54,6 +56,8 @@ class MockDecomposeResult:
                 edge_cases=["Handle invalid input", "Handle network errors"] if config.ENABLE_EDGE_CASES else [],
                 dependencies=["STORY-001"] if config.ENABLE_DEPENDENCIES else [],
                 estimated_complexity="L" if config.ENABLE_COMPLEXITY_ESTIMATION else None,
+                business_value_score=100,
+                effort_score=20,
                 tags=["core", "feature"],
             ),
             UserStory(
@@ -67,6 +71,8 @@ class MockDecomposeResult:
                 ],
                 dependencies=["STORY-002"] if config.ENABLE_DEPENDENCIES else [],
                 estimated_complexity="M" if config.ENABLE_COMPLEXITY_ESTIMATION else None,
+                business_value_score=80,
+                effort_score=40,
                 tags=["testing", "quality"],
             ),
         ]

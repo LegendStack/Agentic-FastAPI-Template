@@ -35,7 +35,14 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from .config import BacklogAgentConfig
-from .nodes import DecomposeNode, ExportNode, FormatNode, InputNode, RefineNode
+from .nodes import (
+    DecomposeNode,
+    ExportNode,
+    FormatNode,
+    InputNode,
+    PrioritizeNode,
+    RefineNode,
+)
 from .schemas import DecompositionResult
 from .state import BacklogAgentState
 
@@ -101,6 +108,7 @@ class BacklogAssistantAgent:
         self.decompose_node = DecomposeNode(config=self.config)
         self.refine_node = RefineNode(config=self.config)
         self.format_node = FormatNode(config=self.config)
+        self.prioritize_node = PrioritizeNode(config=self.config)
         self.save_node = ExportNode(config=self.config)
 
     def _build_graph(self) -> StateGraph:
@@ -122,6 +130,7 @@ class BacklogAssistantAgent:
         workflow.add_node("decompose", self.decompose_node)
         workflow.add_node("refine", self.refine_node)
         workflow.add_node("format", self.format_node)
+        workflow.add_node("prioritize", self.prioritize_node)
         workflow.add_node("save_to_jira", self.save_node)
 
         # Define edges
@@ -139,9 +148,12 @@ class BacklogAssistantAgent:
             },
         )
 
-        # Both decompose and refine go to format
-        workflow.add_edge("decompose", "format")
-        workflow.add_edge("refine", "format")
+        # Decompose and Refine go to Prioritize
+        workflow.add_edge("decompose", "prioritize")
+        workflow.add_edge("refine", "prioritize")
+        
+        # Prioritize goes to format
+        workflow.add_edge("prioritize", "format")
         workflow.add_edge("save_to_jira", "format")
 
         # Format goes to end

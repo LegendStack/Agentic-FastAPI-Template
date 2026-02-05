@@ -98,6 +98,18 @@ class UserStory(BaseModel):
         None,
         description="T-shirt size complexity estimate",
     )
+    business_value_score: int = Field(
+        50,
+        ge=1,
+        le=100,
+        description="Business value score from 1 to 100 (100 = critical/strategic)",
+    )
+    effort_score: int = Field(
+        50,
+        ge=1,
+        le=100,
+        description="Implementation effort score from 1 to 100 (100 = extremely difficult)",
+    )
 
     @model_validator(mode="before")
     @classmethod

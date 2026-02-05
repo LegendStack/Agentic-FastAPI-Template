@@ -6,7 +6,9 @@ import {
     ArrowRightLeft,
     CheckCircle2,
     Copy,
-    Check
+    Check,
+    TrendingUp,
+    ShieldAlert
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { UserStory } from '../hooks/useBacklog';
@@ -129,6 +131,22 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                     {story.estimated_complexity && (
                         <div className="px-3 py-1 rounded-full bg-accent-primary/10 border border-accent-primary/30 text-[10px] text-accent-primary font-bold">
                             SIZE: {story.estimated_complexity}
+                        </div>
+                    )}
+                    {story.business_value_score && story.effort_score && (
+                        <div className={`px-3 py-1 rounded-full border text-[10px] font-bold flex items-center gap-1.5 ${(story.business_value_score / story.effort_score) >= 1.5
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                                : (story.business_value_score / story.effort_score) >= 0.8
+                                    ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                            }`}>
+                            <TrendingUp className="w-3 h-3" />
+                            ROI: {Math.round((story.business_value_score / story.effort_score) * 10) / 10}
+                        </div>
+                    )}
+                    {story.business_value_score && (
+                        <div className="px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-[10px] text-blue-400 font-medium">
+                            VALUE: {story.business_value_score}
                         </div>
                     )}
                     {story.tags.map(tag => (

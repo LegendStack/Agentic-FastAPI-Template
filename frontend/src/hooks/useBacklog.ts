@@ -20,6 +20,8 @@ export interface UserStory {
     technical_notes: string[];
     dependencies: string[];
     estimated_complexity: string | null;
+    business_value_score?: number;
+    effort_score?: number;
     tags: string[];
 }
 
