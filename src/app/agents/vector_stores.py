@@ -92,5 +92,15 @@ class VectorStoreFactory:
                 api_key=settings.AZURE_SEARCH_KEY.get_secret_value(),
                 index_name=settings.AZURE_SEARCH_INDEX_NAME,
             )
+        elif settings.RAG_BACKEND == RAGBackend.REDIS:
+            from .redis_store import RedisVectorStore
+
+            if not settings.REDIS_VECTOR_URL:
+                raise ValueError("Redis Vector Store URL (REDIS_VECTOR_URL) not configured.")
+
+            return RedisVectorStore(
+                redis_url=settings.REDIS_VECTOR_URL,
+                index_name=settings.REDIS_VECTOR_INDEX_NAME,
+            )
         else:
             raise ValueError(f"Unknown RAG backend: {settings.RAG_BACKEND}")
