@@ -6,8 +6,14 @@ from fastapi import FastAPI
 
 from .admin.initialize import create_admin_interface
 from .api import router
+import logging
+logger = logging.getLogger(__name__)
+
 from .core.config import settings
 from .core.setup import create_application, lifespan_factory
+
+logger.info(f"--- STARTUP CONFIG: AZURE_OPENAI_ENDPOINT={settings.AZURE_OPENAI_ENDPOINT} ---")
+logger.info(f"--- STARTUP CONFIG: BACKLOG_USE_MOCKS={settings.BACKLOG_USE_MOCKS} ---")
 
 admin = create_admin_interface()
 
@@ -19,7 +25,7 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
     default_lifespan = lifespan_factory(settings)
 
     # Initialize OpenTelemetry if enabled
-    if os.getenv("OTEL_ENABLED", "true").lower() == "true":
+    if settings.OTEL_ENABLED:
         try:
             from .agents.observability import setup_telemetry
 

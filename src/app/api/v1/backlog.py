@@ -171,9 +171,7 @@ async def decompose_epic(
 
     Returns a thread_id that can be used for subsequent refinement.
     """
-    # Build config from request
     config = BacklogAgentConfig(
-        USE_MOCKS=True,  # Use mocks by default for safety
         STORY_TEMPLATE=request.story_template,
         DEFAULT_OUTPUT_FORMAT=request.output_format,
         ENABLE_EDGE_CASES=request.enable_edge_cases,
@@ -346,7 +344,7 @@ async def export_to_jira(
 
     agent = get_agent(db, config)
 
-    result = await agent.export_to_jira(thread_id)
+    result = await agent.save_to_jira(thread_id)
 
     if result.get("error") and not result.get("export_result"):
         raise HTTPException(status_code=400, detail=result["error"])

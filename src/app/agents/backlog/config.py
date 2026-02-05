@@ -8,6 +8,8 @@ Each feature can be independently enabled or disabled.
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ...core.config import settings
+
 
 @dataclass
 class BacklogAgentConfig:
@@ -28,7 +30,7 @@ class BacklogAgentConfig:
     """
 
     # === Core Settings ===
-    USE_MOCKS: bool = True  # Use mock LLM for testing (no API calls)
+    USE_MOCKS: bool = field(default_factory=lambda: settings.BACKLOG_USE_MOCKS)  # Use mock LLM for testing (no API calls)
 
     # === Output Configuration ===
     DEFAULT_OUTPUT_FORMAT: Literal["json", "markdown", "jira"] = "json"

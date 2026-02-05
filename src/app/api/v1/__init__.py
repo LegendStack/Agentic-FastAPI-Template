@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from ...core.config import AuthProvider, settings
 from .agents import router as agents_router
 from .backlog import router as backlog_router
+from .jira import router as jira_router
 from .health import router as health_router
 from .login import router as login_router
 from .logout import router as logout_router
@@ -27,3 +28,4 @@ router.include_router(tiers_router)
 router.include_router(rate_limits_router)
 router.include_router(agents_router)
 router.include_router(backlog_router)
+router.include_router(jira_router)

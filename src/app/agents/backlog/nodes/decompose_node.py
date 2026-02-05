@@ -11,9 +11,11 @@ from typing import Any
 from ...azure_openai import LLMService
 from ...structured_output import StructuredOutputValidator
 from ..config import BacklogAgentConfig
-from ..prompts import get_decompose_system_prompt, get_decompose_user_prompt
+from ..prompts import get_decompose_system_prompt, get_decompose_user_prompt, get_refine_system_prompt
 from ..schemas import AcceptanceCriteria, DecompositionResult, Epic, UserStory
 from ..state import BacklogAgentState
+from ....core.db.database import async_get_db
+from ...vector_stores import VectorStoreFactory
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +128,11 @@ class DecomposeNode:
             if self.config.USE_MOCKS:
                 result = await self._mock_decompose(parsed_epic)
             else:
-                result = await self._llm_decompose(parsed_epic)
+                # 1. Retrieve similar stories for context (Phase 13)
+                reference_stories = await self._retrieve_reference_stories(parsed_epic)
+                
+                # 2. LLM Decomposition with context
+                result = await self._llm_decompose(parsed_epic, reference_stories=reference_stories)
 
             logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
@@ -146,10 +152,22 @@ class DecomposeNode:
         logger.info("DecomposeNode: Using mock decomposition")
         return MockDecomposeResult.generate(epic, self.config)
 
-    async def _llm_decompose(self, epic: Epic) -> DecompositionResult:
+    async def _llm_decompose(self, epic: Epic, reference_stories: list[UserStory] | None = None) -> DecompositionResult:
         """Use LLM to decompose the epic."""
         if not self.llm_service:
             self.llm_service = LLMService()
+
+        # Build context from reference stories
+        context = epic.context or ""
+        if reference_stories:
+            context += "\n\n### Reference Examples from Past Stories:\n"
+            for s in reference_stories:
+                context += f"- **{s.title}**: {s.description}\n"
+                if s.acceptance_criteria:
+                    context += "  Acceptance Criteria:\n"
+                    for ac in s.acceptance_criteria:
+                        desc = ac.description if hasattr(ac, 'description') else str(ac)
+                        context += f"  * {desc}\n"
 
         # Build prompts
         system_prompt = get_decompose_system_prompt(
@@ -160,7 +178,7 @@ class DecomposeNode:
 
         user_prompt = get_decompose_user_prompt(
             epic_description=epic.description,
-            context=epic.context,
+            context=context.strip(),
             min_stories=self.config.MIN_STORIES_PER_EPIC,
             max_stories=self.config.MAX_STORIES_PER_EPIC,
             min_ac=self.config.MIN_AC_PER_STORY,
@@ -183,6 +201,44 @@ class DecomposeNode:
         result.epic = epic
 
         return result
+
+    async def _retrieve_reference_stories(self, epic: Epic) -> list[UserStory]:
+        """Retrieve similar stories from Azure AI Search."""
+        logger.info("DecomposeNode: Retrieving reference stories")
+        try:
+            # We need a DB session for the factory, but Azure Search store doesn't actually use it
+            # We'll use a dummy call to async_get_db if needed, but get_store(None) might work for Azure Search
+            store = VectorStoreFactory.get_store(None)
+            
+            # Embed the epic description
+            if not self.llm_service:
+                self.llm_service = LLMService()
+            
+            query_vector = await self.llm_service.get_embeddings(epic.description)
+            
+            # Search for top 3 similar stories
+            results = await store.similarity_search(query_vector, k=3)
+            
+            stories = []
+            for r in results:
+                try:
+                    # Content is usually a stringified JSON or plain text
+                    # If it's a story, we can try to parse it
+                    content = r.get("content", "")
+                    # For now, let's just create a simple reference story
+                    stories.append(UserStory(
+                        id=r.get("id", "REF"),
+                        title=r.get("metadata", {}).get("title", "Past Story"),
+                        description=content[:500],
+                        acceptance_criteria=[] # Not strictly needed for context
+                    ))
+                except Exception:
+                    continue
+            
+            return stories
+        except Exception as e:
+            logger.warning(f"DecomposeNode: Failed to retrieve reference stories - {e}")
+            return []
 
 
 # Convenience function for standalone testing

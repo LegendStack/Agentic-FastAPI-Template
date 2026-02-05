@@ -48,8 +48,8 @@ class FormatNode:
         current_result = state.get("current_result")
         if not current_result:
             return {
-                "error": "No decomposition result to format",
-                "is_first_message": not state.get("stories"),  # Assuming 'stories' indicates existing state
+                "error": state.get("error") or "No decomposition result to format",
+                "is_first_message": not state.get("stories"),
                 "is_export_requested": False,
             }
 

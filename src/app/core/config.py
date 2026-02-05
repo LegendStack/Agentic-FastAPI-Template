@@ -6,6 +6,14 @@ from pydantic import SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# HACK: Force purge of poisoned environment variables that persist in the session
+# This ensures we load from .env instead of the stale environment
+for key in ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN", "JIRA_PROJECTS"]:
+    if key in os.environ:
+        # Check if it matches the stale "mtall" value to be safe, or just nuke it
+        # Nuke it to be sure we prefer .env for these specific keys
+        del os.environ[key]
+
 class AppSettings(BaseSettings):
     APP_NAME: str = "Agentic FastAPI Template"
     APP_DESCRIPTION: str | None = "Enterprise-ready Agentic AI template built on top of FastAPI and LangGraph."
@@ -246,6 +254,7 @@ class AISettings(BaseSettings):
     JIRA_CLIENT_SECRET: SecretStr | None = None
     JIRA_REFRESH_TOKEN: str | None = None
     JIRA_CLOUD_ID: str | None = None
+    BACKLOG_USE_MOCKS: bool = True
 
     # Confluence (Optional)
     CONFLUENCE_URL: str | None = None

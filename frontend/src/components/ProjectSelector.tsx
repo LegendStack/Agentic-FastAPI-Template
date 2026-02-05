@@ -1,19 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProjectContext } from '../hooks/useProjectContext';
-import { Building2, ChevronRight, Search } from 'lucide-react';
+import { Building2, ChevronRight, Search, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-const MOCK_PROJECTS = [
-    { id: 'LEGEND-STACK', name: 'LegendStack Engine', key: 'LSE' },
-    { id: 'AI-CORE', name: 'AI Core Infrastructure', key: 'AIC' },
-    { id: 'FRONTEND-UX', name: 'Frontend UX Excellence', key: 'FUX' },
-];
 
 export const ProjectSelector = () => {
     const { setProject } = useProjectContext();
     const [searchTerm, setSearchTerm] = useState('');
+    const [projects, setProjects] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    const filteredProjects = MOCK_PROJECTS.filter(p =>
+    useEffect(() => {
+        const fetchProjects = async () => {
+            try {
+                setIsLoading(true);
+                const response = await fetch('/api/v1/jira/projects');
+                if (!response.ok) throw new Error('Failed to fetch projects');
+                const data = await response.json();
+                setProjects(data);
+                setError(null);
+            } catch (err: any) {
+                console.error('Error fetching JIRA projects:', err);
+                setError(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchProjects();
+    }, []);
+
+    const filteredProjects = projects.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.key.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -48,24 +65,51 @@ export const ProjectSelector = () => {
                 </div>
 
                 <div className="grid gap-3 max-h-[50vh] overflow-y-auto pr-2">
-                    {filteredProjects.map((project, idx) => (
-                        <motion.button
-                            key={project.id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.1 }}
-                            onClick={() => setProject(project.key)}
-                            className="flex items-center justify-between p-5 glass hover:bg-brand-blue/5 rounded-xl border border-slate-700/50 transition-all group text-left"
-                        >
-                            <div className="flex flex-col items-start">
-                                <span className="text-lg font-semibold text-white group-hover:neon-text transition-colors">
-                                    {project.name}
-                                </span>
-                                <span className="text-sm text-slate-500 font-mono tracking-widest">{project.key}</span>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-brand-blue group-hover:translate-x-1 transition-all" />
-                        </motion.button>
-                    ))}
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-10">
+                            <Loader2 className="w-10 h-10 text-brand-blue animate-spin mb-4" />
+                            <p className="text-slate-500">Connecting to JIRA...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center text-red-400">
+                            <p className="font-bold mb-1">Connection Error</p>
+                            <p className="text-xs">{error}</p>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-all text-[10px] uppercase tracking-widest"
+                            >
+                                Retry Connection
+                            </button>
+                        </div>
+                    ) : filteredProjects.length > 0 ? (
+                        filteredProjects.map((project, idx) => (
+                            <motion.button
+                                key={project.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: idx * 0.1 }}
+                                onClick={() => setProject(project.key)}
+                                className="flex items-center justify-between p-5 glass hover:bg-brand-blue/5 rounded-xl border border-slate-700/50 transition-all group text-left"
+                            >
+                                <div className="flex items-center gap-4">
+                                    {project.avatar && (
+                                        <img src={project.avatar} alt="" className="w-10 h-10 rounded-lg" />
+                                    )}
+                                    <div className="flex flex-col items-start">
+                                        <span className="text-lg font-semibold text-white group-hover:neon-text transition-colors">
+                                            {project.name}
+                                        </span>
+                                        <span className="text-sm text-slate-500 font-mono tracking-widest">{project.key}</span>
+                                    </div>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-brand-blue group-hover:translate-x-1 transition-all" />
+                            </motion.button>
+                        ))
+                    ) : (
+                        <div className="py-10 text-center">
+                            <p className="text-slate-500 italic">No projects found matching "{searchTerm}"</p>
+                        </div>
+                    )}
                 </div>
             </motion.div>
         </div>
