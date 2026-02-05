@@ -211,6 +211,7 @@ class AuthProvider(str, Enum):
 class RAGBackend(str, Enum):
     PGVECTOR = "pgvector"
     AZURE_SEARCH = "azure_search"
+    REDIS = "redis"
 
 
 class AuthSettings(BaseSettings):
@@ -243,6 +244,10 @@ class AISettings(BaseSettings):
     AZURE_SEARCH_AUTH_MODE: str = "api_key"  # api_key | oauth2 | managed_identity
     AZURE_SEARCH_CLIENT_ID: str | None = None
     AZURE_SEARCH_CLIENT_SECRET: SecretStr | None = None
+
+    # Redis Vector Store (Optional)
+    REDIS_VECTOR_URL: str | None = None
+    REDIS_VECTOR_INDEX_NAME: str = "agent-index"
 
     # Jira
     JIRA_URL: str | None = None
