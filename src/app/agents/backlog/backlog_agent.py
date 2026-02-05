@@ -264,6 +264,7 @@ class BacklogAssistantAgent:
             "export_result": None,
             "thread_id": thread_id,
             "tenant_id": None,
+            "project_key": project_key or existing_state.get("project_key"),
             "error": None,
             "metadata": existing_state.get("metadata", {}),
         }

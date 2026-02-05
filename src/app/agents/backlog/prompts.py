@@ -44,6 +44,12 @@ You have previously decomposed an epic into user stories. The user is now provid
 ## Current Decomposition
 {current_decomposition}
 
+## Manual Edits Awareness
+If the user has manually updated any stories (as signaled in the request), you MUST:
+1. Acknowledge these edits in your summary.
+2. Respect these manual changes as the new ground truth.
+3. Do not revert or overwrite manual edits unless the current feedback explicitly requests to undo them.
+
 ## Your Task
 Based on the user's feedback, update the decomposition:
 - Add, remove, or modify stories as requested
@@ -180,9 +186,12 @@ def get_refine_system_prompt(current_decomposition: str, project_key: str | None
     return REFINE_SYSTEM_PROMPT.format(current_decomposition=current_decomposition, project_context=project_context)
 
 
-def get_refine_user_prompt(feedback: str) -> str:
+def get_refine_user_prompt(feedback: str, edit_context: str | None = None) -> str:
     """Build the user prompt for refinement."""
-    return REFINE_USER_PROMPT.format(feedback=feedback)
+    prompt = REFINE_USER_PROMPT.format(feedback=feedback)
+    if edit_context:
+        prompt = f"{edit_context}\n\n{prompt}"
+    return prompt
 
 
 def initialize_backlog_prompts(registry: PromptRegistry) -> None:

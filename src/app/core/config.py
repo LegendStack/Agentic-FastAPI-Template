@@ -341,6 +341,12 @@ class Settings(
     ENABLE_ENTITY_MEMORY: bool = False  # Track entities across threads
     ENTITY_EXTRACTION_MODEL: str = "gpt-4o"
     ENTITY_SIMILARITY_THRESHOLD: float = 0.85
+    
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def REDIS_URL(self) -> str:
+        """Alias for semantic caching and other integrations."""
+        return self.REDIS_CACHE_URL
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".env"),

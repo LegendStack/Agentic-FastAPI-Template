@@ -9,7 +9,7 @@ import logging
 import re
 from typing import Any
 
-from ..schemas import Epic
+from ..schemas import Epic, UserStory
 from ..state import BacklogAgentState
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,12 @@ class InputNode:
             # Create a shell result for the graph to proceed
             from ..schemas import DecompositionResult, Epic
 
-            shell_epic = Epic(title="Imported stories", description="Refining pre-populated stories")
+            project_key = state.get("project_key")
+            shell_epic = Epic(
+                title="Imported stories", 
+                description="Refining pre-populated stories",
+                project_key=project_key
+            )
             shell_result = DecompositionResult(
                 epic=shell_epic,
                 stories=normalized_stories,  # Use normalized ones
@@ -114,22 +119,37 @@ class InputNode:
                 "refinement_feedback": None,
                 "is_save_requested": True,
                 "is_first_message": False,
+                "manual_edits_detected": False,  # Edits not relevant for pure save but good to initialize
+                "edit_context": None,
                 "error": None,
             }
 
         if existing_stories and not is_first_message:
             # This is a refinement request
             logger.info("InputNode: Detected refinement request")
+            
+            # Phase 27: Detect manual edits
+            manual_edits_detected, edit_context = self._detect_manual_edits(
+                incoming_stories=state.get("stories", []),
+                existing_stories=existing_stories
+            )
+            
+            if manual_edits_detected:
+                logger.info(f"InputNode: Manual edits detected: {edit_context}")
+
             return {
                 "refinement_feedback": user_message,
                 "is_save_requested": False,
                 "is_first_message": False,
+                "manual_edits_detected": manual_edits_detected,
+                "edit_context": edit_context,
                 "error": None,
             }
 
         # Parse as new epic
-        parsed_epic = self._parse_epic(user_message)
-        logger.info(f"InputNode: Parsed epic - {parsed_epic.title}")
+        project_key = state.get("project_key")
+        parsed_epic = self._parse_epic(user_message, project_key=project_key)
+        logger.info(f"InputNode: Parsed epic - {parsed_epic.title} (Project: {project_key})")
 
         return {
             "epic_input": user_message,
@@ -137,8 +157,63 @@ class InputNode:
             "is_first_message": True,
             "refinement_feedback": None,
             "is_save_requested": False,
+            "manual_edits_detected": False,
+            "edit_context": None,
             "error": None,
         }
+
+    def _detect_manual_edits(self, incoming_stories: list[Any], existing_stories: list[UserStory]) -> tuple[bool, str | None]:
+        """Compare incoming stories with existing ones to detect manual edits."""
+        if not existing_stories or not incoming_stories:
+            return False, None
+
+        edits = []
+        
+        # Create map of existing stories by ID
+        existing_map = {s.id: s for s in existing_stories}
+        
+        for inc_story_data in incoming_stories:
+            if not isinstance(inc_story_data, dict):
+                continue
+                
+            inc_id = inc_story_data.get("id")
+            if not inc_id or inc_id not in existing_map:
+                continue
+                
+            existing = existing_map[inc_id]
+            
+            # Compare fields
+            field_changes = []
+            if inc_story_data.get("title") != existing.title:
+                field_changes.append("title")
+            if inc_story_data.get("description") != existing.description:
+                field_changes.append("description")
+                
+            # Basic AC comparison
+            inc_ac = inc_story_data.get("acceptance_criteria", [])
+            
+            ac_changed = False
+            if len(inc_ac) != len(existing.acceptance_criteria):
+                ac_changed = True
+            else:
+                for i, ac_data in enumerate(inc_ac):
+                    # Incoming might be dict or string
+                    inc_desc = ac_data.get("description") if isinstance(ac_data, dict) else str(ac_data)
+                    if inc_desc != existing.acceptance_criteria[i].description:
+                        ac_changed = True
+                        break
+            
+            if ac_changed:
+                field_changes.append("acceptance criteria")
+                
+            if field_changes:
+                edits.append(f"{inc_id} ({', '.join(field_changes)})")
+                
+        if edits:
+            context = "Note: The user has manually updated the following stories: " + "; ".join(edits)
+            return True, context
+            
+        return False, None
 
     def _is_save_intent(self, text: str) -> bool:
         """Detect if the user wants to save/export to JIRA."""

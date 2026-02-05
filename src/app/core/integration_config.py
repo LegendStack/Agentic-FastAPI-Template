@@ -20,8 +20,8 @@ try:
     from langchain_core.globals import set_llm_cache
     from langchain_redis import RedisSemanticCache
 except ImportError:
-    set_llm_cache = None  # type: ignore
-    RedisSemanticCache = None  # type: ignore
+    set_llm_cache = None
+    RedisSemanticCache = None
 
 from .clients import (
     AzureOpenAIClient,
@@ -64,6 +64,7 @@ def configure_integrations(factory: IntegrationClientFactory | None = None) -> N
 
     Reads settings from app.core.config.settings and configures the client factory.
     """
+    logger.info("Configuring integrations...")
     factory = factory or client_factory
 
     # -------------------------------------------------------------------------
@@ -273,17 +274,19 @@ def configure_integrations(factory: IntegrationClientFactory | None = None) -> N
     # -------------------------------------------------------------------------
     # Semantic Caching (V4.0)
     # -------------------------------------------------------------------------
+    logger.info(f"Checking semantic cache: ENABLE_SEMANTIC_CACHE={getattr(settings, 'ENABLE_SEMANTIC_CACHE', False)}, set_llm_cache={set_llm_cache is not None}, RedisSemanticCache={RedisSemanticCache is not None}")
     if getattr(settings, "ENABLE_SEMANTIC_CACHE", False):
         if set_llm_cache and RedisSemanticCache:
             try:
                 from ..agents.azure_openai import get_azure_openai_embeddings
                 from .encrypted_cache import EncryptedRedisSemanticCache
 
+                logger.info(f"Initializing semantic cache with URL: {settings.REDIS_URL}")
                 set_llm_cache(
                     EncryptedRedisSemanticCache(
                         redis_url=settings.REDIS_URL,
-                        embedding=get_azure_openai_embeddings(),
-                        distance_threshold=settings.SEMANTIC_CACHE_THRESHOLD,
+                        embeddings=get_azure_openai_embeddings(),
+                        distance_threshold=1.0 - settings.SEMANTIC_CACHE_THRESHOLD,
                         ttl=settings.SEMANTIC_CACHE_TTL,
                     )
                 )

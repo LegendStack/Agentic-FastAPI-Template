@@ -28,6 +28,7 @@ class BacklogAgentState(TypedDict):
         export_result: JIRA export status (if triggered)
         thread_id: Conversation thread identifier
         tenant_id: Multi-tenant isolation identifier
+        project_key: JIRA project key associated with this thread
         error: Error message if something failed
         metadata: Arbitrary metadata for extensibility
     """
@@ -56,9 +57,14 @@ class BacklogAgentState(TypedDict):
     # Session management
     thread_id: str
     tenant_id: str | None
+    project_key: str | None
 
     # Error handling
     error: str | None
+
+    # Edit awareness
+    manual_edits_detected: bool
+    edit_context: str | None
 
     # Extensibility
     metadata: dict[str, Any]
