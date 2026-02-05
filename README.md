@@ -105,6 +105,7 @@ cd agentic-fastapi-template && docker compose up
 - 🔍 Azure OpenAI, Cohere, Cross-Encoders
 - 📊 OpenTelemetry (Datadog, Honeycomb)
 - 🔐 Azure Key Vault, Managed Identity
+- 🛡️ HashiCorp Vault (AppRole Auth)
 
 </td>
 <td width="50%">
@@ -279,6 +280,20 @@ uv run pytest tests/ -v
 
 # Run specific test file
 uv run pytest tests/test_demo_agent.py -v
+```
+
+---
+
+## 🔐 HashiCorp Vault Configuration
+
+To enable Vault integration (AppRole Auth):
+
+```bash
+VAULT_ENABLED=true
+VAULT_URL=http://localhost:8200
+VAULT_ROLE_ID=<your-role-id>
+VAULT_SECRET_ID=<your-secret-id>
+VAULT_SECRET_PATH=secret/data/my-app
 ```
 
 ---
