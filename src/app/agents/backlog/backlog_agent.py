@@ -387,10 +387,14 @@ class BacklogAssistantAgent:
             input_tokens = usage.get("input_tokens", 0)
             output_tokens = usage.get("output_tokens", 0)
 
+            # Use content from FormatNode if available (has rich Jira links)
+            assistant_messages = [m for m in final_state.get("messages", []) if m.get("role") == "assistant"]
+            assistant_content = assistant_messages[-1].get("content") if assistant_messages else current_result.summary
+
             await conversation_service.add_message(
                 thread_id=thread_id, 
                 role="assistant", 
-                content=current_result.summary,
+                content=assistant_content,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
             )
@@ -467,7 +471,7 @@ class BacklogAssistantAgent:
                 if issues:
                     links_text = "🚀 **JIRA issues saved successfully!**\n\n"
                     for issue in issues:
-                        links_text += f"- [{issue['jira_key']}]({issue['url']})\n"
+                        links_text += f"- [{issue['jira_key']}]({issue['url']}) - {issue.get('summary', '')}\n"
                     
                     await conversation_service.add_message(
                         thread_id=thread_id,
@@ -478,6 +482,7 @@ class BacklogAssistantAgent:
         return {
             "thread_id": thread_id,
             "export_result": save_result.get("export_result"),
+            "stories": save_result.get("stories", []),
             "error": save_result.get("error"),
         }
 

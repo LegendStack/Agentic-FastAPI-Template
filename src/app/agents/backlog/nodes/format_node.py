@@ -87,7 +87,7 @@ class FormatNode:
                     if issues:
                         assistant_content += "\n\n**Created JIRA Issues:**\n"
                         for issue in issues:
-                            assistant_content += f"- [{issue.get('jira_key')}]({issue.get('url')})\n"
+                            assistant_content += f"- [{issue.get('jira_key')}]({issue.get('url')}) - {issue.get('summary', '')}\n"
 
                 messages = messages + [{"role": "assistant", "content": assistant_content}]
 
@@ -114,7 +114,8 @@ class FormatNode:
             for issue in issues:
                 key = issue.get("jira_key", "N/A")
                 url = issue.get("url", "#")
-                confirmation += f"- **[{key}]({url})**\n"
+                summary = issue.get("summary", "")
+                confirmation += f"- **[{key}]({url})** - {summary}\n"
 
         return formatted + confirmation
 

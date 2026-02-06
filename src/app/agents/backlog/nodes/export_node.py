@@ -88,6 +88,8 @@ class ExportNode:
 
             return {
                 "export_result": result,
+                "stories": result.get("stories", []),
+                "current_result": current_result,
                 "error": None,
             }
 
@@ -122,14 +124,23 @@ class ExportNode:
                     "jira_key": mock_key,
                     "url": f"https://jira.example.com/browse/{mock_key}",
                     "status": "created",
+                    "summary": story.title,
                 }
             )
+
+        # Update stories in-place
+        jira_lookup = {issue["internal_id"]: issue for issue in created_issues}
+        for story in result.stories:
+            if story.id in jira_lookup:
+                story.jira_key = jira_lookup[story.id]["jira_key"]
+                story.jira_url = jira_lookup[story.id]["url"]
 
         return {
             "status": "success",
             "message": f"Created {len(created_issues)} issues (mock)",
             "issues": created_issues,
             "epic_key": "MOCK-EPIC-001",
+            "stories": result.stories,
         }
 
     async def _jira_export(self, result: DecompositionResult, state: BacklogAgentState) -> dict[str, Any]:
@@ -233,6 +244,7 @@ class ExportNode:
             "jira_key": data["key"],
             "url": f"{base_url}/browse/{data['key']}",
             "status": "created",
+            "summary": story.title,
         }
 
     async def _index_stories(self, stories: list[UserStory]) -> None:
