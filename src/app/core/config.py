@@ -149,7 +149,7 @@ class GraphSettings(BaseSettings):
 
 class FrameworkExpansionSettings(BaseSettings):
     # Semantic Cache
-    ENABLE_SEMANTIC_CACHE: bool = False
+    ENABLE_SEMANTIC_CACHE: bool = True
     SEMANTIC_CACHE_THRESHOLD: float = 0.95  # Standard threshold (safe with targeted embedding)
     SEMANTIC_CACHE_TTL: int = 3600 * 24  # 24 hours
 
