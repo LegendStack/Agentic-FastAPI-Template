@@ -60,6 +60,10 @@ class DecomposeRequest(BaseModel):
         True,
         description="Add T-shirt size estimates",
     )
+    parent_epic_id: str | None = Field(
+        None,
+        description="Optional JIRA Epic ID to link stories to",
+    )
 
 
 class ChatRequest(BaseModel):
@@ -79,6 +83,10 @@ class ChatRequest(BaseModel):
     stories: list[UserStory] | None = Field(
         None,
         description="Optional: Inject existing stories (for 'Door B' refinement)",
+    )
+    parent_epic_id: str | None = Field(
+        None,
+        description="Optional JIRA Epic ID to link stories to",
     )
 
 
@@ -120,6 +128,10 @@ class RefineRequest(BaseModel):
         None,
         description="Override output format",
     )
+    parent_epic_id: str | None = Field(
+        None,
+        description="Optional JIRA Epic ID to link stories to",
+    )
 
 
 class ExportRequest(BaseModel):
@@ -138,6 +150,7 @@ class ExportResponse(BaseModel):
     status: str
     message: str
     issues: list[dict] | None = None
+    stories: list[UserStory] | None = None
     errors: list[dict] | None = None
     error: str | None = None
 
@@ -182,12 +195,13 @@ async def decompose_epic(
     )
 
     try:
-        agent = get_agent(db)
+        agent = get_agent(db, config=config)
         result = await agent.decompose(
             epic_description=request.epic_description,
             context=request.context,
             output_format=request.output_format,
             project_key=project_key,
+            parent_epic_id=request.parent_epic_id,
         )
 
         if result.get("error"):
@@ -237,39 +251,42 @@ async def refine_decomposition(
     This unified endpoint supports:
     1. **Continuation**: Send feedback for stories already in the thread.
     2. **Hydration (Door B)**: Send a list of `stories` in the first message to initialize refinement.
-
-    Examples:
-    - "Add more edge cases" (Continuation)
-    - "Make these BDD" + [stories] (Hydration)
     """
     config = BacklogAgentConfig(USE_MOCKS=False)
-    agent = get_agent(db, config)
+    
+    try:
+        agent = get_agent(db, config=config)
+        result = await agent.chat(
+            thread_id=thread_id,
+            message=request.message,
+            output_format=request.output_format,
+            initial_stories=request.stories,
+            project_key=project_key,
+            parent_epic_id=request.parent_epic_id,
+        )
 
-    result = await agent.chat(
-        thread_id=thread_id,
-        message=request.message,
-        output_format=request.output_format,
-        initial_stories=request.stories,
-        project_key=project_key,
-    )
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result["error"])
 
-    if result.get("error"):
-        raise HTTPException(status_code=400, detail=result["error"])
+        # Extract recommendations from full response
+        full_response = result.get("response", {})
+        recommendations = full_response.get("recommendations", []) if full_response else []
 
-    full_response = result.get("response", {})
-    recommendations = full_response.get("recommendations", []) if full_response else []
-
-    return DecomposeResponse(
-        thread_id=result["thread_id"],
-        story_count=result.get("story_count", 0),
-        summary=result.get("summary"),
-        output_format=result.get("output_format", "json"),
-        stories=result.get("stories", []),
-        formatted_output=result.get("formatted_output"),
-        recommendations=recommendations,
-        error=result.get("error"),
-        usage=result.get("usage"),
-    )
+        return DecomposeResponse(
+            thread_id=result["thread_id"],
+            story_count=result.get("story_count", 0),
+            summary=result.get("summary"),
+            output_format=result.get("output_format", "json"),
+            stories=result.get("stories", []),
+            formatted_output=result.get("formatted_output"),
+            recommendations=recommendations,
+            error=result.get("error"),
+            usage=result.get("usage"),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Debug Error Chat: {str(e)}")
 
 
 @router.get("/stories/{thread_id}")
@@ -318,7 +335,7 @@ async def get_stories(
                         "id": str(m.id),
                         "role": m.role,
                         "content": m.content,
-                        "timestamp": m.created_at.timestamp() * 1000,
+                        "timestamp": (m.created_at.timestamp() * 1000) if m.created_at else None,
                         "input_tokens": m.input_tokens,
                         "output_tokens": m.output_tokens,
                     }
@@ -413,6 +430,7 @@ async def refine_existing_stories(
         output_format=request.output_format,
         initial_stories=request.stories,
         project_key=project_key,
+        parent_epic_id=request.parent_epic_id,
     )
 
     if result.get("error"):
@@ -469,6 +487,7 @@ async def export_to_jira(
         status=export_result.get("status", "error"),
         message=export_result.get("message", "Unknown error"),
         issues=export_result.get("issues"),
+        stories=result.get("stories"),
         errors=export_result.get("errors"),
         error=result.get("error"),
     )

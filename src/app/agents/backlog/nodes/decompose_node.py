@@ -5,8 +5,11 @@ Core story decomposition logic using LLM with structured output.
 Generates user stories from an epic description.
 """
 
+import json
 import logging
+import uuid
 from typing import Any
+
 
 from ...azure_openai import LLMService
 from ...structured_output import StructuredOutputValidator
@@ -108,6 +111,9 @@ class DecomposeNode:
         llm_service: LLMService | None = None,
     ):
         self.config = config or BacklogAgentConfig()
+        # Double safety check: If use_mocks is not explicitly set to False in initialization, 
+        # and we are in a factory or API context, ensure we respect the global override if provided.
+        # But here, we just want to be sure it's not unintentionally True.
         self.llm_service = llm_service
         self.validator = StructuredOutputValidator()
 
@@ -146,6 +152,10 @@ class DecomposeNode:
                     reference_stories=reference_stories,
                     story_template=story_template
                 )
+
+            if not self.config.USE_MOCKS and not result.stories:
+                logger.error("DecomposeNode: LLM returned empty stories list")
+                return {"error": "Decomposition returned no user stories. Please try a more detailed epic description."}
 
             logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
@@ -211,6 +221,10 @@ class DecomposeNode:
             enable_complexity=self.config.ENABLE_COMPLEXITY_ESTIMATION,
         )
 
+        logger.info("DecomposeNode: Final context length: %d chars", len(context))
+        logger.info("DecomposeNode: SYSTEM PROMPT SNIPPET: %s", system_prompt[:200])
+        logger.info("DecomposeNode: USER PROMPT SNIPPET: %s", user_prompt[:200])
+
         # Use structured output validator with retry
         result_data, usage_metadata = await self.validator.with_retry(
             llm=self.llm_service,
@@ -222,12 +236,14 @@ class DecomposeNode:
 
         # Ensure epic is set correctly
         result_data.epic = epic
+        
+        logger.debug(f"DecomposeNode: Raw result stories ID: {[s.id for s in result_data.stories]}")
 
         return result_data, usage_metadata
 
     async def _retrieve_reference_stories(self, epic: Epic) -> list[UserStory]:
         """Retrieve similar stories from Azure AI Search."""
-        logger.info("DecomposeNode: Retrieving reference stories")
+        logger.info(f"DecomposeNode: Retrieving reference stories for: '{epic.description[:50]}...'")
         try:
             # We need a DB session for the factory, but Azure Search store doesn't actually use it
             # We'll use a dummy call to async_get_db if needed, but get_store(None) might work for Azure Search
@@ -245,19 +261,33 @@ class DecomposeNode:
             stories = []
             for r in results:
                 try:
-                    # Content is usually a stringified JSON or plain text
-                    # If it's a story, we can try to parse it
+                    score = r.get("score", 0)
                     content = r.get("content", "")
-                    # For now, let's just create a simple reference story
+                    title = r.get("metadata", {}).get("title", "Past Story")
+                    
+                    logger.info(f"DecomposeNode: Found potential reference - '{title}' (Score: {score:.4f})")
+                    
+                    # Threshold for reference examples - only use if reasonably similar
+                    # 0.3 is a more conservative threshold for Azure Search hybrid scores
+                    if score < 0.3:
+                        logger.info(f"DecomposeNode: Skipping low-score reference story '{title}' (score: {score:.4f} < 0.3)")
+                        continue
+                        
                     stories.append(UserStory(
                         id=r.get("id", "REF"),
-                        title=r.get("metadata", {}).get("title", "Past Story"),
+                        title=title,
                         description=content[:500],
-                        acceptance_criteria=[] # Not strictly needed for context
+                        acceptance_criteria=[] 
                     ))
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"DecomposeNode: Error parsing reference story - {e}")
                     continue
             
+            if stories:
+                ref_titles = [s.title for s in stories]
+                logger.info(f"DecomposeNode: Using {len(stories)} reference stories: {ref_titles}")
+            else:
+                logger.info("DecomposeNode: No reference stories found")
             return stories
         except Exception as e:
             logger.warning(f"DecomposeNode: Failed to retrieve reference stories - {e}")
@@ -291,10 +321,8 @@ class DecomposeNode:
                     score = top_match.get("score", 0)
                     
                     # Threshold for considering it a "Potential Duplicate"
-                    # Azure Search @search.score varies by index, but vector similarity 
-                    # is usually higher for duplicates.
-                    # We'll use a conservative threshold for now.
-                    if score > 0.03: # Adjusted for Azure Search scores (standard hybrid scores)
+                    # 0.1 is a more reliable threshold for Azure Search hybrid scores
+                    if score > 0.1: 
                         story.is_duplicate = True
                         match_title = top_match.get("metadata", {}).get("title", "Existing Story")
                         match_id = top_match.get("metadata", {}).get("story_id", "Unknown")

@@ -149,8 +149,8 @@ class GraphSettings(BaseSettings):
 
 class FrameworkExpansionSettings(BaseSettings):
     # Semantic Cache
-    ENABLE_SEMANTIC_CACHE: bool = True
-    SEMANTIC_CACHE_THRESHOLD: float = 0.9  # Similarity threshold
+    ENABLE_SEMANTIC_CACHE: bool = False
+    SEMANTIC_CACHE_THRESHOLD: float = 0.95  # Standard threshold (safe with targeted embedding)
     SEMANTIC_CACHE_TTL: int = 3600 * 24  # 24 hours
 
     # Reflector
@@ -259,7 +259,19 @@ class AISettings(BaseSettings):
     JIRA_CLIENT_SECRET: SecretStr | None = None
     JIRA_REFRESH_TOKEN: str | None = None
     JIRA_CLOUD_ID: str | None = None
-    BACKLOG_USE_MOCKS: bool = True
+    # Backlog Agent Settings (Enterprise Decomposition)
+    BACKLOG_USE_MOCKS: bool = False
+
+    # Jira Field Mapping
+    JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA: str | None = None
+    JIRA_FIELD_MAP_TECH_NOTES: str | None = None
+    JIRA_FIELD_MAP_COMPLEXITY: str | None = None
+    JIRA_FIELD_MAP_DEPENDENCIES: str | None = None
+    JIRA_FIELD_MAP_PRIORITY: str | None = None
+
+    # Jira Epic Configuration
+    JIRA_EPIC_ISSUE_TYPE: str = "Epic"
+    JIRA_EPIC_NAME_FIELD: str | None = "customfield_10011"
 
     # Confluence (Optional)
     CONFLUENCE_URL: str | None = None
@@ -334,7 +346,7 @@ class Settings(
 ):
     # --- Framework Expansion (V4.0) ---
     ENABLE_SEMANTIC_CACHE: bool = True
-    SEMANTIC_CACHE_THRESHOLD: float = 0.9
+    SEMANTIC_CACHE_THRESHOLD: float = 0.98
     SEMANTIC_CACHE_TTL: int = 3600 * 24
 
     ENABLE_REFLECTOR: bool = True

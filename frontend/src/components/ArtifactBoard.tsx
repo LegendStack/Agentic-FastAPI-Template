@@ -14,6 +14,8 @@ interface ArtifactBoardProps {
     onUpdateStory: (story: UserStory) => void;
     onDeleteStory: (id: string) => void;
     onCollapse?: () => void;
+    saveToJira?: () => void;
+    isSavingToJira?: boolean;
 }
 
 export const ArtifactBoard = ({
@@ -25,7 +27,9 @@ export const ArtifactBoard = ({
     onLoadVersion,
     onUpdateStory,
     onDeleteStory,
-    onCollapse
+    onCollapse,
+    saveToJira,
+    isSavingToJira
 }: ArtifactBoardProps) => {
     const [isVersionOpen, setIsVersionOpen] = useState(false);
     return (
@@ -79,7 +83,7 @@ export const ArtifactBoard = ({
                             onClick={() => setIsVersionOpen(!isVersionOpen)}
                             className="flex items-center gap-2 px-4 py-2 bg-bg-tertiary hover:bg-bg-secondary rounded-xl border border-border-primary text-[11px] font-bold text-text-secondary hover:text-text-primary transition-all shadow-lg min-w-[140px]"
                         >
-                            <Clock className="w-3.5 h-3.5 text-accent-primary" />
+                            <Clock className="w-4 h-4 text-accent-primary" strokeWidth={2.5} />
                             <span className="flex-1 text-left truncate">
                                 {activeVersionId ? `Version ${versions.length - versions.findIndex(v => v.checkpoint_id === activeVersionId)}` : "Latest Version"}
                             </span>
@@ -170,6 +174,46 @@ export const ArtifactBoard = ({
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* Jira Save Footer - Phase 43 */}
+            {stories.length > 0 && (
+                <div className="p-4 border-t border-border-primary bg-bg-secondary/20 glass backdrop-blur-xl sticky bottom-0 z-20">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-text-tertiary uppercase tracking-widest font-bold">Jira Sync</span>
+                            <span className="text-xs text-text-secondary">
+                                {stories.filter(s => s.jira_key).length} of {stories.length} stories linked
+                            </span>
+                        </div>
+
+                        <button
+                            onClick={saveToJira}
+                            disabled={isSavingToJira || stories.every(s => s.jira_key)}
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-[11px] transition-all shadow-lg active:scale-95 ${stories.every(s => s.jira_key)
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default'
+                                : 'bg-accent-primary text-slate-900 hover:bg-accent-secondary hover:shadow-accent-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+                                }`}
+                        >
+                            {isSavingToJira ? (
+                                <>
+                                    <div className="w-3 h-3 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
+                                    Saving to JIRA...
+                                </>
+                            ) : stories.every(s => s.jira_key) ? (
+                                <>
+                                    <Check className="w-4 h-4" strokeWidth={2.5} />
+                                    All Stories Saved
+                                </>
+                            ) : (
+                                <>
+                                    <LayoutDashboard className="w-4 h-4" strokeWidth={2.5} />
+                                    Save {stories.filter(s => !s.jira_key).length} Stories to JIRA
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

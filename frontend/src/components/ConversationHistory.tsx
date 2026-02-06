@@ -25,6 +25,7 @@ interface ConversationHistoryProps {
     onSelectThread: (threadId: string) => void;
     onNewConversation: () => void;
     currentThreadId?: string;
+    isMinimized?: boolean;
 }
 
 const formatRelativeTime = (dateString: string): string => {
@@ -72,6 +73,7 @@ export const ConversationHistory = ({
     onSelectThread,
     onNewConversation,
     currentThreadId,
+    isMinimized
 }: ConversationHistoryProps) => {
     const queryClient = useQueryClient();
     const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -143,10 +145,11 @@ export const ConversationHistory = ({
             <div className="px-4 py-3 border-b border-border-primary">
                 <button
                     onClick={onNewConversation}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/30 rounded-xl transition-all text-accent-primary font-semibold text-sm"
+                    title={isMinimized ? "New Chat" : undefined}
+                    className={`w-full flex items-center justify-center gap-2 bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/30 rounded-xl transition-all text-accent-primary font-semibold text-sm ${isMinimized ? 'p-2.5' : 'px-4 py-2.5'}`}
                 >
-                    <Plus className="w-4 h-4" />
-                    New Chat
+                    <Plus className="w-4 h-4 flex-shrink-0" />
+                    {!isMinimized && <span>New Chat</span>}
                 </button>
             </div>
 
@@ -162,10 +165,12 @@ export const ConversationHistory = ({
                             if (!conversations || conversations.length === 0) return null;
 
                             return (
-                                <div key={group} className="mb-6 last:mb-2">
-                                    <h4 className="px-3 mb-2 text-[10px] font-bold text-text-tertiary uppercase tracking-widest">
-                                        {group}
-                                    </h4>
+                                <div key={group} className="mb-6 last:mb-2 text-center">
+                                    {!isMinimized && (
+                                        <h4 className="px-3 mb-2 text-[10px] font-bold text-text-tertiary uppercase tracking-widest text-left">
+                                            {group}
+                                        </h4>
+                                    )}
                                     {conversations.map((conv) => (
                                         <motion.div
                                             key={conv.thread_id}
@@ -173,70 +178,77 @@ export const ConversationHistory = ({
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, x: -10 }}
                                             onClick={() => onSelectThread(conv.thread_id)}
-                                            className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg transition-all text-left mb-1 group/item cursor-pointer ${currentThreadId === conv.thread_id
+                                            className={`w-full flex items-start rounded-lg transition-all text-left mb-1 group/item cursor-pointer ${currentThreadId === conv.thread_id
                                                 ? 'bg-accent-primary/10 border border-accent-primary/30'
                                                 : 'hover:bg-bg-tertiary border border-transparent'
-                                                }`}
+                                                } ${isMinimized ? 'p-2 justify-center' : 'gap-3 px-3 py-2.5'}`}
                                         >
-                                            <MessageSquare className={`w-4 h-4 mt-0.5 flex-shrink-0 ${currentThreadId === conv.thread_id
+                                            <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isMinimized ? '' : 'mt-0.5'} ${currentThreadId === conv.thread_id
                                                 ? 'text-accent-primary'
                                                 : 'text-text-secondary'
                                                 }`} />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between gap-2 overflow-hidden">
-                                                    {editingThreadId === conv.thread_id ? (
-                                                        <div className="flex-1 flex items-center gap-1 min-w-0" onClick={e => e.stopPropagation()}>
-                                                            <input
-                                                                autoFocus
-                                                                type="text"
-                                                                value={editTitle}
-                                                                onChange={e => setEditTitle(e.target.value)}
-                                                                onKeyDown={e => e.key === 'Enter' && handleSaveEdit(e as any, conv.thread_id)}
-                                                                className="flex-1 bg-bg-primary border border-accent-primary/50 rounded px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-accent-primary"
-                                                            />
-                                                            <button onClick={e => handleSaveEdit(e, conv.thread_id)} className="p-1 hover:text-accent-primary text-text-tertiary">
-                                                                <Check className="w-3 h-3" />
-                                                            </button>
-                                                            <button onClick={e => { e.stopPropagation(); setEditingThreadId(null); }} className="p-1 hover:text-red-400 text-text-tertiary">
-                                                                <X className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <p className={`text-sm font-medium truncate ${currentThreadId === conv.thread_id
-                                                                ? 'text-accent-primary'
-                                                                : 'text-text-primary'
-                                                                }`}>
-                                                                {conv.title || 'Untitled Chat'}
-                                                            </p>
-                                                            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                                <button
-                                                                    onClick={(e) => handleStartEdit(e, conv)}
-                                                                    className="p-1 hover:text-accent-primary text-text-tertiary transition-colors"
-                                                                >
-                                                                    <Pencil className="w-3 h-3" />
+                                            {!isMinimized && (
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2 overflow-hidden">
+                                                        {editingThreadId === conv.thread_id ? (
+                                                            <div className="flex-1 flex items-center gap-1 min-w-0" onClick={e => e.stopPropagation()}>
+                                                                <input
+                                                                    autoFocus
+                                                                    type="text"
+                                                                    value={editTitle}
+                                                                    onChange={e => setEditTitle(e.target.value)}
+                                                                    onKeyDown={e => e.key === 'Enter' && handleSaveEdit(e as any, conv.thread_id)}
+                                                                    className="flex-1 bg-bg-primary border border-accent-primary/50 rounded px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-accent-primary"
+                                                                />
+                                                                <button onClick={e => handleSaveEdit(e, conv.thread_id)} className="p-1 hover:text-accent-primary text-text-tertiary">
+                                                                    <Check className="w-3 h-3" />
                                                                 </button>
-                                                                <button
-                                                                    onClick={(e) => handleDelete(e, conv.thread_id)}
-                                                                    className="p-1 hover:text-red-400 text-text-tertiary transition-colors"
-                                                                >
-                                                                    <Trash2 className="w-3 h-3" />
+                                                                <button onClick={e => { e.stopPropagation(); setEditingThreadId(null); }} className="p-1 hover:text-red-400 text-text-tertiary">
+                                                                    <X className="w-3 h-3" />
                                                                 </button>
                                                             </div>
-                                                        </>
-                                                    )}
+                                                        ) : (
+                                                            <>
+                                                                <p className={`text-sm font-medium truncate ${currentThreadId === conv.thread_id
+                                                                    ? 'text-accent-primary'
+                                                                    : 'text-text-primary'
+                                                                    }`}>
+                                                                    {conv.title || 'Untitled Chat'}
+                                                                </p>
+                                                                <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        onClick={(e) => handleStartEdit(e, conv)}
+                                                                        className="p-1 hover:text-accent-primary text-text-tertiary transition-colors"
+                                                                    >
+                                                                        <Pencil className="w-3 h-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => handleDelete(e, conv.thread_id)}
+                                                                        className="p-1 hover:text-red-400 text-text-tertiary transition-colors"
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center justify-between mt-0.5">
+                                                        <p className="text-[10px] text-text-secondary">
+                                                            {formatRelativeTime(conv.updated_at || conv.created_at)}
+                                                        </p>
+                                                        {conv.metadata?.project_key && !editingThreadId && (
+                                                            <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
+                                                                {conv.metadata.project_key}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center justify-between mt-0.5">
-                                                    <p className="text-[10px] text-text-secondary">
-                                                        {formatRelativeTime(conv.updated_at || conv.created_at)}
-                                                    </p>
-                                                    {conv.metadata?.project_key && !editingThreadId && (
-                                                        <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
-                                                            {conv.metadata.project_key}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            )}
+                                            {isMinimized && conv.metadata?.project_key && (
+                                                <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
+                                                    {conv.metadata.project_key}
+                                                </span>
+                                            )}
                                         </motion.div>
                                     ))}
                                 </div>

@@ -64,6 +64,7 @@ class BacklogAgentState(BaseAgentState):
     thread_id: str
     tenant_id: str | None
     project_key: str | None
+    parent_epic_id: str | None # New field for Epic linking
 
     # Error handling
     error: str | None

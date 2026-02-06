@@ -68,9 +68,12 @@ export const OracleDrawer = ({ onSendMessage, isProcessing, recommendations = []
                 <button
                     type="submit"
                     disabled={!input.trim() || isProcessing}
-                    className="p-4 bg-accent-primary text-bg-primary font-bold rounded-xl hover:bg-list transition-colors disabled:opacity-50 disabled:grayscale flex items-center justify-center group"
+                    className="p-4 bg-accent-primary text-slate-900 font-bold rounded-xl hover:bg-accent-secondary transition-colors disabled:opacity-50 disabled:grayscale flex items-center justify-center group shadow-lg"
                 >
-                    <Wand2 className={`w-6 h-6 ${isProcessing ? 'animate-spin' : 'group-hover:rotate-12'} transition-transform`} />
+                    <Wand2
+                        className={`w-5 h-5 ${isProcessing ? 'animate-spin' : 'group-hover:rotate-12'} transition-transform`}
+                        strokeWidth={2.5}
+                    />
                 </button>
             </motion.form>
         </div>

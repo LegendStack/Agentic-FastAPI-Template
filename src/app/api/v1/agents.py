@@ -199,7 +199,7 @@ async def create_conversation(
         "thread_id": conversation.thread_id,
         "title": conversation.title,
         "agent_name": conversation.agent_name,
-        "created_at": conversation.created_at.isoformat(),
+        "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
     }
 
 
@@ -232,7 +232,7 @@ async def list_conversations(
                 "agent_name": c.agent_name,
                 "status": c.status,
                 "metadata": c.metadata_json,
-                "created_at": c.created_at.isoformat(),
+                "created_at": c.created_at.isoformat() if c.created_at else None,
                 "updated_at": c.updated_at.isoformat() if c.updated_at else None,
             }
             for c in conversations
@@ -254,7 +254,7 @@ async def get_conversation(thread_id: str, db: Annotated[AsyncSession, Depends(a
         "title": conversation.title,
         "agent_name": conversation.agent_name,
         "status": conversation.status,
-        "created_at": conversation.created_at.isoformat(),
+        "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
         "messages": [
             {
                 "id": m.id,
@@ -262,7 +262,7 @@ async def get_conversation(thread_id: str, db: Annotated[AsyncSession, Depends(a
                 "content": m.content,
                 "input_tokens": m.input_tokens,
                 "output_tokens": m.output_tokens,
-                "created_at": m.created_at.isoformat(),
+                "created_at": m.created_at.isoformat() if m.created_at else None,
             }
             for m in conversation.messages
         ],
@@ -288,7 +288,7 @@ async def get_messages(
                 "input_tokens": m.input_tokens,
                 "output_tokens": m.output_tokens,
                 "tool_calls": m.tool_calls,
-                "created_at": m.created_at.isoformat(),
+                "created_at": m.created_at.isoformat() if m.created_at else None,
             }
             for m in messages
         ]

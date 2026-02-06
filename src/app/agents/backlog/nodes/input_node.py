@@ -125,6 +125,23 @@ class InputNode:
             }
 
         if existing_stories and not is_first_message:
+            # Detect if this is a "Pivot": starting a new epic in the same thread
+            if self._is_new_epic_intent(user_message, existing_stories):
+                logger.info("InputNode: Detected pivot to new epic. Resetting state.")
+                parsed_epic = self._parse_epic(user_message, project_key=project_key)
+                return {
+                    "epic_input": user_message,
+                    "parsed_epic": parsed_epic,
+                    "stories": [], # Reset stories for new epic
+                    "current_result": None,
+                    "is_first_message": True, # Treat as first message to trigger DecomposeNode
+                    "refinement_feedback": None,
+                    "is_save_requested": False,
+                    "manual_edits_detected": False,
+                    "edit_context": None,
+                    "error": None,
+                }
+
             # This is a refinement request
             logger.info("InputNode: Detected refinement request")
             
@@ -161,6 +178,38 @@ class InputNode:
             "edit_context": None,
             "error": None,
         }
+
+    def _is_new_epic_intent(self, text: str, existing_stories: list[UserStory]) -> bool:
+        """
+        Detect if the user is likely starting a new epic rather than refining.
+        Heuristics:
+        - High word count (> 20 words)
+        - No mention of existing story titles or internal refinement keywords
+        - Presence of 'epic' formatting tokens (#, Heading, etc.)
+        """
+        text_lower = text.lower()
+        word_count = len(text.split())
+
+        # If it's short, it's likely feedback
+        if word_count < 15:
+            return False
+
+        # If it contains specific feedback verbs
+        feedback_verbs = ["add", "change", "remove", "update", "modify", "split", "merge", "make", "explain", "why"]
+        # Basic check: if it starts with a verb, it's likely feedback
+        first_word = text_lower.split()[0] if text_lower.split() else ""
+        if first_word in feedback_verbs:
+            return False
+
+        # If it mentions 'epic' or has structured layout
+        if any(p in text for p in ["# ", "Title:", "Epic:", "Feature:"]):
+            return True
+
+        # If it's reasonably long and doesn't look like a command
+        if word_count > 30:
+            return True
+
+        return False
 
     def _detect_manual_edits(self, incoming_stories: list[Any], existing_stories: list[UserStory]) -> tuple[bool, str | None]:
         """Compare incoming stories with existing ones to detect manual edits."""

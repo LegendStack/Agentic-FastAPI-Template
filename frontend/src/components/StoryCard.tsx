@@ -42,7 +42,7 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
 
             <div className="flex items-start gap-3">
                 <div className="mt-1 p-1.5 rounded-md bg-accent-primary/10 text-accent-primary">
-                    <Hash className="w-3.5 h-3.5" />
+                    <Hash className="w-4 h-4" strokeWidth={2.5} />
                 </div>
                 <div className="flex-1">
                     <div className="flex items-baseline gap-2 mb-1">
@@ -55,7 +55,7 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                                 className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-[10px] text-accent-primary hover:bg-accent-primary/20 transition-all ml-1"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <ExternalLink className="w-2.5 h-2.5" />
+                                <ExternalLink className="w-3 h-3" strokeWidth={2.5} />
                                 {story.jira_key}
                             </a>
                         )}
@@ -89,7 +89,7 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
 
             {story.is_duplicate && (
                 <div className="mb-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3">
-                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" strokeWidth={2.5} />
                     <div className="text-[11px] text-amber-200/80 italic">
                         {story.duplicate_reason || "Potential overlap with an existing story in the backlog."}
                     </div>
@@ -99,7 +99,7 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
             {/* Acceptance Criteria with Markdown Support */}
             <div className="space-y-2">
                 <h4 className="text-[10px] font-bold text-text-secondary uppercase tracking-widest flex items-center gap-2">
-                    <CheckCircle2 className="w-3 h-3" /> Acceptance Criteria
+                    <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} /> Acceptance Criteria
                 </h4>
                 <div className="text-sm text-text-secondary pl-5 prose prose-invert max-w-none">
                     {story.acceptance_criteria.length > 0 ? (
@@ -145,7 +145,7 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                 <div className="flex flex-wrap gap-2">
                     {story.acceptance_criteria.length > 0 && (
                         <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-bg-primary/80 border border-border-primary text-[10px] text-text-secondary">
-                            <Zap className="w-3 h-3 text-yellow-400" />
+                            <Zap className="w-3.5 h-3.5 text-yellow-400" strokeWidth={2.5} />
                             {story.acceptance_criteria.length} Criteria
                         </div>
                     )}
@@ -161,7 +161,7 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                                 ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
                                 : 'bg-red-500/10 border-red-500/30 text-red-400'
                             }`}>
-                            <TrendingUp className="w-3 h-3" />
+                            <TrendingUp className="w-3.5 h-3.5" strokeWidth={2.5} />
                             ROI: {Math.round((story.business_value_score / story.effort_score) * 10) / 10}
                         </div>
                     )}

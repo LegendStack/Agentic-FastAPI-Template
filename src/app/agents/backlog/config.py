@@ -55,7 +55,14 @@ class BacklogAgentConfig:
     ENABLE_JIRA_EXPORT: bool = True  # Enable JIRA issue creation
     JIRA_PROJECT_KEY: str | None = None  # Default project for exports
     JIRA_ISSUE_TYPE: str = "Story"  # Issue type for created stories
+    JIRA_EPIC_ISSUE_TYPE: str = field(default_factory=lambda: settings.JIRA_EPIC_ISSUE_TYPE)
+    JIRA_EPIC_NAME_FIELD: str = field(default_factory=lambda: settings.JIRA_EPIC_NAME_FIELD)
     JIRA_EPIC_LINK_FIELD: str = "customfield_10014"  # Epic link custom field
+    JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA)
+    JIRA_FIELD_MAP_TECH_NOTES: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_TECH_NOTES)
+    JIRA_FIELD_MAP_COMPLEXITY: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_COMPLEXITY)
+    JIRA_FIELD_MAP_DEPENDENCIES: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_DEPENDENCIES)
+    JIRA_FIELD_MAP_PRIORITY: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_PRIORITY)
 
     # === Refinement ===
     MAX_REFINEMENT_TURNS: int = 10  # Max conversation turns before reset

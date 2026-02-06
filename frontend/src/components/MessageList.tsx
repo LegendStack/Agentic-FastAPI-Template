@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { User, Sparkles, Copy, Check } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import type { Message } from '../hooks/useBacklog';
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface MessageListProps {
     messages: Message[];
@@ -10,43 +11,47 @@ interface MessageListProps {
 export const MessageList = ({ messages }: MessageListProps) => {
     if (messages.length === 0) return null;
 
+    const formatTokens = (val?: number) => {
+        if (!val) return '0';
+        if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
+        return val.toString();
+    };
+
     return (
-        <div className="max-w-4xl mx-auto px-12 pt-8 flex flex-col gap-6">
+        <div className="max-w-5xl mx-auto px-12 pt-8 flex flex-col gap-8">
             {messages.map((msg, idx) => (
                 <motion.div
                     key={msg.id}
-                    initial={{ opacity: 0, x: msg.role === 'user' ? 20 : -20 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
-                    className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                    className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-accent-primary/20 text-accent-primary' : 'bg-bg-tertiary text-text-secondary border border-border-primary'
-                        }`}>
-                        {msg.role === 'user' ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-                    </div>
-
-                    <div className={`relative max-w-[80%] px-6 py-4 rounded-2xl transition-all shadow-xl backdrop-blur-md group ${msg.role === 'user'
-                        ? 'bg-accent-primary/10 text-text-primary rounded-tr-none'
-                        : 'bg-bg-tertiary/50 text-text-primary border border-border-primary rounded-tl-none'
+                    <div className={`relative px-6 py-4 rounded-2xl transition-all group ${msg.role === 'user'
+                        ? 'max-w-[80%] bg-accent-primary/10 text-text-primary rounded-tr-none shadow-xl backdrop-blur-md border border-accent-primary/20'
+                        : 'w-full bg-transparent text-text-primary rounded-tl-none border-b border-border-primary/30 pb-8'
                         }`}>
                         <div className="relative">
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                            <CopyButton content={msg.content} />
-                        </div>
+                            {msg.role === 'assistant' ? (
+                                <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-p:text-text-primary/95 prose-a:text-accent-primary prose-a:no-underline hover:prose-a:underline prose-strong:text-accent-primary prose-ul:list-disc prose-ul:pl-4">
+                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                </div>
+                            ) : (
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                    {msg.content}
+                                </p>
+                            )}
 
-                        {/* Decorative tail - Only for assistant */}
-                        {msg.role !== 'user' && (
-                            <>
-                                <div className="absolute top-0 w-4 h-4 -left-1 bg-bg-tertiary/50 border-l border-t border-border-primary -rotate-45 -z-10" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }} />
-                                {(msg.input_tokens || msg.output_tokens) && (
-                                    <div className="mt-2 pt-2 border-t border-border-primary/50 flex justify-end">
-                                        <div className="text-[10px] text-text-tertiary font-mono">
-                                            {msg.input_tokens || 0} in / {msg.output_tokens || 0} out
-                                        </div>
+                            <div className={`absolute bottom-[-24px] flex items-center gap-4 ${msg.role === 'user' ? 'right-0' : 'left-0'}`}>
+                                <CopyButton content={msg.content} role={msg.role} />
+
+                                {msg.role === 'assistant' && (msg.input_tokens || msg.output_tokens) && (
+                                    <div className="text-[10px] text-text-tertiary font-mono tracking-tighter bg-bg-tertiary/30 px-2 py-0.5 rounded border border-border-primary/50">
+                                        {formatTokens(msg.input_tokens)} in • {formatTokens(msg.output_tokens)} out
                                     </div>
                                 )}
-                            </>
-                        )}
+                            </div>
+                        </div>
                     </div>
                 </motion.div>
             ))}
@@ -61,7 +66,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
     );
 };
 
-const CopyButton = ({ content }: { content: string }) => {
+const CopyButton = ({ content, role }: { content: string, role: string }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = async () => {
@@ -73,10 +78,14 @@ const CopyButton = ({ content }: { content: string }) => {
     return (
         <button
             onClick={handleCopy}
-            className="absolute -top-1 -right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-bg-primary/50 text-text-tertiary hover:text-accent-primary hover:bg-bg-primary/80"
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all text-text-tertiary hover:text-accent-primary hold ${role === 'assistant'
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100'
+                }`}
             title="Copy to clipboard"
         >
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            <span className="text-[9px] font-bold uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
         </button>
     );
 };

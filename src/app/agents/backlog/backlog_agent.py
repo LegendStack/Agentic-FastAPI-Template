@@ -211,6 +211,7 @@ class BacklogAssistantAgent:
         output_format: Literal["json", "markdown", "jira"] = "json",
         thread_id: str | None = None,
         project_key: str | None = None,
+        parent_epic_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Decompose an epic into user stories.
@@ -238,7 +239,36 @@ class BacklogAssistantAgent:
             message=full_input,
             output_format=output_format,
             project_key=project_key,
+            parent_epic_id=parent_epic_id,
         )
+
+    async def _generate_smart_title(self, message: str) -> str:
+        """Generate a concise 3-5 word title from the user message."""
+        try:
+            from ..azure_openai import LLMService
+            llm = LLMService()
+            
+            prompt = f"""Generate a concise, professional title (3-5 words) for a JIRA epic decomposition task based on this user message.
+            
+            User Message: {message}
+            
+            Title rules:
+            1. Title-cased
+            2. 3-5 words only
+            3. No quotes, no prefix like "Title:", no period at the end
+            4. Focus on the core business feature or project being described.
+            
+            Title:"""
+            
+            response = await llm.chat([{"role": "user", "content": prompt}])
+            title = response.content.strip().strip('"').strip("'")
+            # Fallback if LLM gives something too long or empty
+            if not title or len(title.split()) > 7:
+                return message[:50].split("\n")[0] + "..."
+            return title
+        except Exception as e:
+            logger.warning(f"BacklogAgent: Failed to generate smart title - {e}")
+            return message[:50].split("\n")[0] + "..."
 
     async def chat(
         self,
@@ -247,6 +277,7 @@ class BacklogAssistantAgent:
         output_format: Literal["json", "markdown", "jira"] | None = None,
         initial_stories: list[Any] | None = None,
         project_key: str | None = None,
+        parent_epic_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Process a chat message for decomposition or refinement.
@@ -286,7 +317,8 @@ class BacklogAssistantAgent:
         messages = existing_state.get("messages", [])
         messages.append({"role": "user", "content": message})
         
-        logger.info(f"BacklogAssistantAgent: Chat loop starting. is_first={not existing_state.get('stories')}")
+        is_first = not existing_state.get('stories')
+        logger.info(f"BacklogAssistantAgent: Chat loop starting. is_first={is_first}")
 
         initial_state: BacklogAgentState = {
             "messages": messages,
@@ -295,7 +327,7 @@ class BacklogAssistantAgent:
             "stories": initial_stories or existing_state.get("stories", []),
             "current_result": existing_state.get("current_result"),
             "refinement_feedback": None,
-            "is_first_message": not existing_state.get("stories"),
+            "is_first_message": is_first,
             "is_save_requested": False,
             "output_format": output_format or existing_state.get("output_format", self.config.DEFAULT_OUTPUT_FORMAT),
             "story_template": existing_state.get("story_template", self.config.STORY_TEMPLATE),
@@ -304,29 +336,31 @@ class BacklogAssistantAgent:
             "thread_id": thread_id,
             "tenant_id": None,
             "project_key": project_key or existing_state.get("project_key"),
+            "parent_epic_id": parent_epic_id or existing_state.get("parent_epic_id"),
             "error": None,
             "metadata": existing_state.get("metadata", {}),
         }
 
         if self.checkpointer:
             # Sync with ConversationService for history tracking
-            # We do this asynchronously to avoid blocking the main flow if possible,
-            # but here we'll await it to ensure consistency.
             if hasattr(self.checkpointer, "db"):
                 from ..conversations import ConversationService
-
                 conversation_service = ConversationService(self.checkpointer.db)
 
                 # Ensure conversation exists
                 existing_conv = await conversation_service.get_conversation(thread_id)
                 if not existing_conv:
+                    # Generate smart title instead of simple truncation
+                    title = await self._generate_smart_title(message)
                     await conversation_service.create_conversation(
                         thread_id=thread_id,
                         agent_name="backlog_assistant",
-                        title=existing_state.get("epic_input", "New Epic")[:50] + "..."
-                        if existing_state.get("epic_input")
-                        else "New Conversation",
+                        title=title,
                     )
+                elif is_first:
+                    # If this is effectively a first message (even if thread existed)
+                    title = await self._generate_smart_title(message)
+                    await conversation_service.update_conversation_title(thread_id, title)
 
                 # Store project_key in metadata if provided
                 if project_key:
@@ -467,10 +501,42 @@ class BacklogAssistantAgent:
                 from ..conversations import ConversationService
                 conversation_service = ConversationService(self.checkpointer.db)
                 
-                issues = save_result.get("export_result", {}).get("issues", [])
+                # save_result IS the dictionary returned by ExportNode.__call__
+                # which contains "export_result"
+                export_result = save_result.get("export_result", {})
+                issues = export_result.get("issues", [])
                 if issues:
+                    # Separate Epic from stories
+                    epic_key = export_result.get("epic_key")
+                    epic_issue = next((i for i in issues if i.get("internal_id") == "EPIC"), None)
+                    # Also check issues list for the epic_key in case internal_id isn't "EPIC"
+                    if not epic_issue and epic_key:
+                        epic_issue = next((i for i in issues if i.get("jira_key") == epic_key), None)
+                    
+                    story_issues = [i for i in issues if i != epic_issue]
+                    
                     links_text = "🚀 **JIRA issues saved successfully!**\n\n"
-                    for issue in issues:
+                    
+                    if epic_key:
+                        if epic_issue:
+                            links_text += f"**Epic Created/Linked:**\n"
+                            links_text += f"- [{epic_issue['jira_key']}]({epic_issue['url']}) - {epic_issue.get('summary', 'Parent Epic')}\n\n"
+                        else:
+                            base_url = settings.JIRA_URL or "https://jira.atlassian.net"
+                            summary = ""
+                            parsed_epic = state.get("parsed_epic")
+                            if parsed_epic:
+                                # parsed_epic might be a dict or a model
+                                summary = parsed_epic.title if hasattr(parsed_epic, 'title') else parsed_epic.get('title', '')
+                            
+                            links_text += f"**Linked to Parent Epic:**\n"
+                            links_text += f"- [{epic_key}]({base_url}/browse/{epic_key}){f' - {summary}' if summary else ''}\n\n"
+                        
+                        links_text += "**User Stories Decomposed:**\n"
+                    else:
+                        links_text += "**User Stories Created:**\n"
+                    
+                    for issue in story_issues:
                         links_text += f"- [{issue['jira_key']}]({issue['url']}) - {issue.get('summary', '')}\n"
                     
                     await conversation_service.add_message(

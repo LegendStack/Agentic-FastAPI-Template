@@ -46,6 +46,13 @@ export interface ArtifactVersion {
     is_refinement: boolean;
 }
 
+export interface Epic {
+    title: string;
+    description: string;
+    key?: string;
+    summary?: string;
+}
+
 export interface DecomposeResponse {
     thread_id: string;
     stories: UserStory[];
@@ -56,6 +63,9 @@ export interface DecomposeResponse {
     jira_base_url?: string;
     messages?: any[];
     metadata?: any;
+    response?: {
+        epic: Epic;
+    };
 }
 
 export const useBacklog = (initialThreadId?: string) => {
@@ -65,8 +75,9 @@ export const useBacklog = (initialThreadId?: string) => {
     const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
     const [jiraBaseUrl, setJiraBaseUrl] = useState<string | null>(null);
     const [recommendations, setRecommendations] = useState<string[]>([]);
+    const [currentEpic, setCurrentEpic] = useState<Epic | null>(null);
     const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(initialThreadId);
-    const { selectedProject } = useProjectContext();
+    const { selectedProject, selectedEpic } = useProjectContext();
 
     // Load thread from URL on mount
     useEffect(() => {
@@ -135,7 +146,8 @@ export const useBacklog = (initialThreadId?: string) => {
                     // FIRST MESSAGE: Use the /decompose endpoint which generates the ID
                     response = await api.post<DecomposeResponse>('/backlog/decompose', {
                         epic_description: message,
-                        output_format: 'json'
+                        output_format: 'json',
+                        parent_epic_id: selectedEpic?.key
                     }, {
                         params: { project_key: selectedProject }
                     });
@@ -145,6 +157,7 @@ export const useBacklog = (initialThreadId?: string) => {
                         message,
                         stories: localStories,
                         output_format: 'json',
+                        parent_epic_id: selectedEpic?.key
                     }, {
                         params: { project_key: selectedProject }
                     });
@@ -186,6 +199,9 @@ export const useBacklog = (initialThreadId?: string) => {
             if (data.recommendations) {
                 setRecommendations(data.recommendations);
             }
+            if (data.response?.epic) {
+                setCurrentEpic(data.response.epic);
+            }
         },
     });
 
@@ -203,6 +219,9 @@ export const useBacklog = (initialThreadId?: string) => {
             }
             if (response.data.jira_base_url) {
                 setJiraBaseUrl(response.data.jira_base_url);
+            }
+            if (response.data.response?.epic) {
+                setCurrentEpic(response.data.response.epic);
             }
 
             // Use messages from backend if provided (Phase 23 fix)
@@ -249,6 +268,23 @@ export const useBacklog = (initialThreadId?: string) => {
         setCurrentThreadId(undefined);
     }, []);
 
+    // Phase 43: Save to JIRA mutation
+    const saveToJiraMutation = useMutation({
+        mutationFn: async (threadId: string) => {
+            const response = await api.post(`/backlog/export/${threadId}`);
+            return response.data;
+        },
+        onSuccess: (data, threadId) => {
+            if (data.stories) {
+                setStories(data.stories);
+            }
+            // Refresh messages/thread to show the new JIRA links assistant message
+            if (threadId) {
+                loadThread(threadId);
+            }
+        }
+    });
+
     return {
         stories,
         setStories,
@@ -258,6 +294,7 @@ export const useBacklog = (initialThreadId?: string) => {
         loadVersion,
         recommendations,
         currentThreadId,
+        currentEpic,
         loadThread,
         updateStoryLocally,
         reset,
@@ -265,5 +302,7 @@ export const useBacklog = (initialThreadId?: string) => {
         isProcessing: chatMutation.isPending,
         sendMessage: chatMutation.mutate,
         error: chatMutation.error,
+        saveToJira: (threadId: string) => saveToJiraMutation.mutate(threadId),
+        isSavingToJira: saveToJiraMutation.isPending
     };
 };

@@ -20,12 +20,18 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef
 const msalInstance = new PublicClientApplication(msalConfig);
 const queryClient = new QueryClient();
 
-const Dashboard = () => {
+const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => void }) => {
   const { instance, accounts } = useMsal();
-  const { selectedProject, setProject } = useProjectContext();
+  const {
+    selectedProject,
+    setProject,
+    selectedEpic
+  } = useProjectContext();
   const artifactPanelRef = usePanelRef();
   const [isArtifactCollapsed, setIsArtifactCollapsed] = useState(false);
+  const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [isValueDashboardOpen, setIsValueDashboardOpen] = useState(false);
+
   const {
     stories,
     setStories,
@@ -40,7 +46,10 @@ const Dashboard = () => {
     loadThread,
     recommendations,
     reset,
-    jiraBaseUrl
+    jiraBaseUrl,
+    saveToJira,
+    isSavingToJira,
+    currentEpic
   } = useBacklog();
 
   const handleSelectThread = async (threadId: string) => {
@@ -68,38 +77,39 @@ const Dashboard = () => {
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
-      <aside className="w-72 border-r border-border-primary flex flex-col glass z-10 shrink-0">
-        <div className="p-6 flex items-center justify-between">
+      <aside className={`border-r border-border-primary flex flex-col glass z-10 shrink-0 transition-all duration-300 ${isSidebarMinimized ? 'w-20' : 'w-72'}`}>
+        <div className={`p-6 flex items-center justify-between ${isSidebarMinimized ? 'flex-col gap-4 px-0' : ''}`}>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-brand-blue bg-opacity-20">
+            <div className="p-2 rounded-lg bg-brand-blue bg-opacity-20 shrink-0">
               <Layers className="w-6 h-6 neon-text" />
             </div>
-            <span className="font-bold text-xl text-text-primary tracking-tighter">BACKLOG.AI</span>
+            {!isSidebarMinimized && <span className="font-bold text-xl text-text-primary tracking-tighter">BACKLOG.AI</span>}
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setIsValueDashboardOpen(true)}
-              className="p-2 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-emerald-400 transition-all"
-              title="ROI Metrics"
-            >
-              <BarChart3 className="w-5 h-5" />
-            </button>
-            <ThemeToggle />
-          </div>
+          <button
+            onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
+            className="p-1.5 hover:bg-bg-tertiary rounded-lg text-text-tertiary transition-all"
+          >
+            <ChevronLeft className={`w-4 h-4 transition-transform duration-300 ${isSidebarMinimized ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
-        <div className="px-4 mt-4">
+        <div className={`px-4 mt-4 ${isSidebarMinimized ? 'px-2' : ''}`}>
           <button
-            onClick={() => setProject(null)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-text-secondary hover:text-accent-primary hover:bg-accent-primary/10 border border-border-primary hover:border-accent-primary/30"
+            onClick={() => {
+              onOpenProjectSelector();
+            }}
+            title={isSidebarMinimized ? `Project: ${selectedProject}` : "Change Project"}
+            className={`flex items-center gap-3 py-3 rounded-xl transition-all text-text-secondary hover:text-accent-primary hover:bg-accent-primary/10 border border-border-primary hover:border-accent-primary/30 ${isSidebarMinimized ? 'w-full justify-center px-0' : 'w-full px-4'}`}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <div className="flex-1 flex items-center justify-between">
-              <span className="text-sm font-semibold">Change Project</span>
-              {selectedProject && (
-                <span className="text-[10px] text-accent-primary font-mono">{selectedProject}</span>
-              )}
-            </div>
+            <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
+            {!isSidebarMinimized && (
+              <div className="flex-1 flex items-center justify-between overflow-hidden">
+                <span className="text-sm font-semibold truncate">Project</span>
+                {selectedProject && (
+                  <span className="text-[10px] text-accent-primary font-mono truncate ml-2">{selectedProject}</span>
+                )}
+              </div>
+            )}
           </button>
         </div>
 
@@ -108,25 +118,43 @@ const Dashboard = () => {
             onSelectThread={handleSelectThread}
             onNewConversation={handleNewConversation}
             currentThreadId={currentThreadId}
+            isMinimized={isSidebarMinimized}
           />
         </div>
 
-        <div className="p-4 border-t border-border-primary flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 overflow-hidden min-w-0">
-            <div className="w-8 h-8 rounded-full bg-bg-tertiary flex items-center justify-center text-xs text-text-primary shrink-0 border border-border-primary/50">
-              <User className="w-4 h-4" />
+        <div className={`p-4 border-t border-border-primary flex flex-col gap-4 bg-bg-secondary/30`}>
+          <div className={`flex items-center justify-between gap-3 overflow-hidden min-w-0 ${isSidebarMinimized ? 'flex-col items-center' : ''}`}>
+            <div className={`flex items-center gap-3 min-w-0 ${isSidebarMinimized ? 'flex-col items-center' : ''}`}>
+              <div className="w-8 h-8 rounded-full bg-bg-tertiary flex items-center justify-center text-xs text-text-primary shrink-0 border border-border-primary/50">
+                <User className="w-4 h-4" />
+              </div>
+              {!isSidebarMinimized && (
+                <span className="text-sm font-bold text-text-primary truncate">
+                  {accounts[0]?.name ? accounts[0].name.split(' ')[0] : (accounts[0]?.username?.split('@')[0] || 'User')}
+                </span>
+              )}
             </div>
-            <span className="text-sm font-bold text-text-primary truncate">
-              {accounts[0]?.name ? accounts[0].name.split(' ')[0] : (accounts[0]?.username?.split('@')[0] || 'User')}
-            </span>
+            {!isSidebarMinimized && (
+              <button
+                onClick={() => instance.logoutRedirect()}
+                className="p-2 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-red-400 transition-all shrink-0"
+                title="Sign Out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            )}
           </div>
-          <button
-            onClick={() => instance.logoutRedirect()}
-            className="p-2 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-red-400 transition-all shrink-0"
-            title="Sign Out"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+
+          <div className={`flex items-center gap-2 ${isSidebarMinimized ? 'flex-col' : 'justify-between'}`}>
+            <button
+              onClick={() => setIsValueDashboardOpen(true)}
+              className={`p-2 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-emerald-400 transition-all ${isSidebarMinimized ? 'w-full flex justify-center' : ''}`}
+              title="ROI Metrics"
+            >
+              <BarChart3 className="w-5 h-5" />
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
@@ -140,18 +168,47 @@ const Dashboard = () => {
                   Refinement
                   <Sparkles className="w-4 h-4 text-accent-primary" />
                   {selectedProject && (
-                    <span className="ml-2 px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
-                      {jiraBaseUrl ? (
-                        <a
-                          href={`${jiraBaseUrl}/projects/${selectedProject}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:underline"
-                        >
-                          {selectedProject}
-                        </a>
-                      ) : selectedProject}
-                    </span>
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <span className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
+                        {jiraBaseUrl ? (
+                          <a
+                            href={`${jiraBaseUrl}/projects/${selectedProject}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline"
+                          >
+                            {selectedProject}
+                          </a>
+                        ) : selectedProject}
+                      </span>
+                      {(selectedEpic || currentEpic) && (
+                        <>
+                          <span className="text-text-tertiary">/</span>
+                          <span
+                            className="px-2 py-0.5 rounded-md bg-accent-primary/20 border border-accent-primary/40 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle"
+                            title={selectedEpic?.summary || currentEpic?.title}
+                          >
+                            {jiraBaseUrl && (selectedEpic?.key || currentEpic?.key) ? (
+                              <a
+                                href={`${jiraBaseUrl}/browse/${selectedEpic?.key || currentEpic?.key}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                              >
+                                {selectedEpic?.key || currentEpic?.key || "NEW EPIC"}
+                              </a>
+                            ) : (
+                              selectedEpic?.key || currentEpic?.key || "NEW EPIC"
+                            )}
+                          </span>
+                          {!selectedEpic && currentEpic && !currentEpic.key && (
+                            <span className="text-[10px] text-text-tertiary italic ml-1">
+                              (to be created)
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   )}
                 </h2>
                 <button
@@ -223,6 +280,8 @@ const Dashboard = () => {
                 onLoadVersion={loadVersion}
                 onUpdateStory={updateStoryLocally}
                 onDeleteStory={deleteStory}
+                saveToJira={() => currentThreadId && saveToJira(currentThreadId)}
+                isSavingToJira={isSavingToJira}
                 onCollapse={() => artifactPanelRef.current?.collapse()}
               />
             </div>
@@ -238,13 +297,14 @@ const Dashboard = () => {
 const AuthWrapper = () => {
   const { instance } = useMsal();
   const { selectedProject } = useProjectContext();
+  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(!selectedProject);
   const bypassAuth = import.meta.env.VITE_BYPASS_AUTH === 'true';
 
   if (bypassAuth) {
     return (
       <>
-        <Dashboard />
-        {!selectedProject && <ProjectSelector />}
+        <Dashboard onOpenProjectSelector={() => setIsProjectSelectorOpen(true)} />
+        {isProjectSelectorOpen && <ProjectSelector onClose={() => setIsProjectSelectorOpen(false)} />}
       </>
     );
   }
@@ -252,8 +312,8 @@ const AuthWrapper = () => {
   return (
     <>
       <AuthenticatedTemplate>
-        <Dashboard />
-        {!selectedProject && <ProjectSelector />}
+        <Dashboard onOpenProjectSelector={() => setIsProjectSelectorOpen(true)} />
+        {isProjectSelectorOpen && <ProjectSelector onClose={() => setIsProjectSelectorOpen(false)} />}
       </AuthenticatedTemplate>
       <UnauthenticatedTemplate>
         <div className="min-h-screen flex flex-col items-center justify-center bg-bg-primary p-6 pt-20 transition-colors duration-300">
