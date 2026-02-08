@@ -7,7 +7,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ..core.config import settings
 from ..core.security_utils import TenantEncryption
-
 from .azure_openai import LLMService
 from .base import BaseIndexer, BaseVectorStore
 

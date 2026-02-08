@@ -1,8 +1,8 @@
-import httpx
 from typing import Any
 
-from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
+import httpx
 from langchain_core.messages import BaseMessage
+from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 
 from ..core.config import settings
 
@@ -42,7 +42,7 @@ class LLMService:
         # while still preventing session leaks via singleton pattern.
         self._client = httpx.AsyncClient(timeout=60.0)
         self._sync_client = httpx.Client(timeout=60.0)
-        
+
         self.chat_model = AzureChatOpenAI(
             azure_deployment=settings.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
             openai_api_version=settings.AZURE_OPENAI_API_VERSION,
@@ -74,7 +74,7 @@ class LLMService:
     async def chat(self, messages: list[dict[str, str]] | list[BaseMessage]) -> Any:
         """Send a message list to the chat model."""
         return await self.chat_model.ainvoke(messages)
-    
+
     async def close(self):
         """Close the internal HTTP clients."""
         await self._client.aclose()

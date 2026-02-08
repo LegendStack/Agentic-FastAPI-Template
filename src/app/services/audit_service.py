@@ -57,14 +57,14 @@ class AuditService:
                 status=status,
                 tenant_id=tenant_id,
             )
-            
+
             self.db.add(audit_entry)
             await self.db.commit()
             await self.db.refresh(audit_entry)
-            
+
             logger.info(f"AuditService: Logged {action} on {resource_type} {resource_id}")
             return audit_entry
-            
+
         except Exception as e:
             logger.error(f"AuditService: Failed to log event - {e}", exc_info=True)
             # We explicitly do NOT raise here to avoid breaking the main flow

@@ -137,10 +137,10 @@ Do not include any text outside the JSON object."""
 
                 response = await llm.chat(messages)
                 validated_data = self.validate(response.content, schema)
-                
+
                 # Capture usage metadata if available (LangChain style)
                 usage = getattr(response, "usage_metadata", {})
-                
+
                 return validated_data, usage
 
             except StructuredOutputError as e:

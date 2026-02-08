@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MockDocument:
     """A document with content and metadata."""
+
     id: str
     content: str
     embedding: list[float] = field(default_factory=list)
@@ -25,17 +26,17 @@ class MockDocument:
 class MockVectorStore:
     """
     An in-memory vector store for demo and testing.
-    
+
     Features:
     - Pre-populated with sample LegendStack documentation
     - Cosine similarity search
     - Supports add/delete/search operations
-    
+
     Usage:
         store = MockVectorStore()
         results = await store.similarity_search(query_vector, k=3)
     """
-    
+
     # Pre-populated sample documents
     SAMPLE_DOCS = [
         {
@@ -44,7 +45,7 @@ class MockVectorStore:
             "metadata": {"source": "readme", "topic": "overview"},
         },
         {
-            "id": "doc_2", 
+            "id": "doc_2",
             "content": "The RAG pipeline uses pgvector for efficient similarity search. Documents are chunked, embedded, and stored with metadata for filtering.",
             "metadata": {"source": "docs", "topic": "rag"},
         },
@@ -79,12 +80,12 @@ class MockVectorStore:
             "metadata": {"source": "docs", "topic": "safety"},
         },
     ]
-    
+
     def __init__(self):
         """Initialize with sample documents."""
         self.documents: list[MockDocument] = []
         self._load_sample_docs()
-        
+
     def _load_sample_docs(self):
         """Load pre-defined sample documents with mock embeddings."""
         for doc_data in self.SAMPLE_DOCS:
@@ -98,16 +99,17 @@ class MockVectorStore:
             )
             self.documents.append(doc)
         logger.info(f"MockVectorStore: Loaded {len(self.documents)} sample documents")
-    
+
     def _generate_embedding(self, text: str) -> list[float]:
         """Generate a deterministic mock embedding from text."""
         import random
+
         hash_val = hash(text.lower())
         random.seed(hash_val)
         embedding = [random.uniform(-1, 1) for _ in range(1536)]
         random.seed()
         return embedding
-    
+
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         """Calculate cosine similarity between two vectors."""
         dot_product = sum(x * y for x, y in zip(a, b))
@@ -116,50 +118,46 @@ class MockVectorStore:
         if norm_a == 0 or norm_b == 0:
             return 0.0
         return dot_product / (norm_a * norm_b)
-    
+
     async def similarity_search(
-        self, 
-        query_vector: list[float], 
-        k: int = 4,
-        filter_metadata: dict[str, Any] | None = None
+        self, query_vector: list[float], k: int = 4, filter_metadata: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
         """
         Search for similar documents.
-        
+
         Args:
             query_vector: The query embedding
             k: Number of results to return
             filter_metadata: Optional metadata filters
-            
+
         Returns:
             List of matching documents with scores
         """
         results = []
-        
+
         for doc in self.documents:
             # Apply metadata filter if provided
             if filter_metadata:
-                match = all(
-                    doc.metadata.get(key) == value 
-                    for key, value in filter_metadata.items()
-                )
+                match = all(doc.metadata.get(key) == value for key, value in filter_metadata.items())
                 if not match:
                     continue
-            
+
             score = self._cosine_similarity(query_vector, doc.embedding)
-            results.append({
-                "id": doc.id,
-                "content": doc.content,
-                "metadata": doc.metadata,
-                "score": score,
-            })
-        
+            results.append(
+                {
+                    "id": doc.id,
+                    "content": doc.content,
+                    "metadata": doc.metadata,
+                    "score": score,
+                }
+            )
+
         # Sort by score descending
         results.sort(key=lambda x: x["score"], reverse=True)
-        
+
         logger.info(f"MockVectorStore: Found {len(results[:k])} results")
         return results[:k]
-    
+
     async def add_documents(self, documents: list[dict[str, Any]]) -> list[str]:
         """Add documents to the store."""
         ids = []
@@ -173,7 +171,7 @@ class MockVectorStore:
             self.documents.append(doc)
             ids.append(doc.id)
         return ids
-    
+
     async def delete_documents(self, ids: list[str]) -> None:
         """Delete documents by ID."""
         self.documents = [doc for doc in self.documents if doc.id not in ids]

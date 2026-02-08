@@ -125,6 +125,9 @@ except ImportError:
 # Background Tasks
 from .background import enqueue_agent_task, get_task_status
 
+# Backlog Assistant Agent
+from .backlog import BacklogAgentConfig, BacklogAssistantAgent
+
 # Conversations
 from .conversations import ConversationService
 
@@ -183,9 +186,6 @@ from .resilience import (
 
 # Sample Agent (for reference)
 from .sample_agent import DocAssistantAgent
-
-# Backlog Assistant Agent
-from .backlog import BacklogAssistantAgent, BacklogAgentConfig
 
 # Streaming
 from .streaming import StreamingChatResponse, sse_stream

@@ -1,14 +1,14 @@
 import os
 import unittest
-import sys
 from unittest.mock import MagicMock, patch
+
+from src.app.core.config import Settings
 
 # Ensure we can import the module
 from src.app.core.vault import VaultSettingsSource
-from src.app.core.config import Settings
+
 
 class TestVaultIntegration(unittest.TestCase):
-    
     def setUp(self):
         # Clear env vars before each test
         keys = ["VAULT_ENABLED", "VAULT_URL", "VAULT_ROLE_ID", "VAULT_SECRET_ID", "VAULT_SECRET_PATH"]
@@ -28,12 +28,7 @@ class TestVaultIntegration(unittest.TestCase):
         mock_client = MagicMock()
         mock_client.is_authenticated.return_value = True
         mock_client.read.return_value = {
-            "data": {
-                "data": {
-                    "APP_NAME": "Vault Powered App",
-                    "SECRET_KEY": "vault-secret-key"
-                }
-            }
+            "data": {"data": {"APP_NAME": "Vault Powered App", "SECRET_KEY": "vault-secret-key"}}
         }
 
         mock_hvac = MagicMock()
@@ -52,16 +47,17 @@ class TestVaultIntegration(unittest.TestCase):
 
     def test_vault_settings_source_disabled(self):
         os.environ["VAULT_ENABLED"] = "false"
-        
+
         # We don't need to mock hvac here efficiently, but let's do it to ensure no calls
         mock_hvac = MagicMock()
-        
+
         with patch.dict("sys.modules", {"hvac": mock_hvac}):
             source = VaultSettingsSource(Settings)
             result = source()
-            
+
             self.assertEqual(result, {})
             mock_hvac.Client.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

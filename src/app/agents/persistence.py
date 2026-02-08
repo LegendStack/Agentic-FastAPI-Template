@@ -1,15 +1,15 @@
 import logging
 from collections.abc import AsyncIterator, Iterator, Sequence
 from typing import Any
-from langgraph.checkpoint.base import (
-    BaseCheckpointSaver, 
-    Checkpoint, 
-    CheckpointMetadata, 
-    CheckpointTuple,
-    ChannelVersions,
-    PendingWrite
-)
+
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import (
+    BaseCheckpointSaver,
+    ChannelVersions,
+    Checkpoint,
+    CheckpointMetadata,
+    CheckpointTuple,
+)
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,24 +53,21 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
             else:
                 # Fallback for older formats if any
                 checkpoint = checkpoint_data
-            
+
             return CheckpointTuple(
                 config=config,
                 checkpoint=checkpoint,
                 metadata=row.metadata_json,
-                parent_config={
-                    "configurable": {
-                        "thread_id": thread_id,
-                        "checkpoint_id": row.parent_id
-                    }
-                } if row.parent_id else None
+                parent_config={"configurable": {"thread_id": thread_id, "checkpoint_id": row.parent_id}}
+                if row.parent_id
+                else None,
             )
         return None
 
     async def aput(
-        self, 
-        config: RunnableConfig, 
-        checkpoint: Checkpoint, 
+        self,
+        config: RunnableConfig,
+        checkpoint: Checkpoint,
         metadata: CheckpointMetadata,
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
@@ -80,10 +77,7 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
 
         # Use self.serde.dumps_typed to get a serializable representation
         checkpoint_type, checkpoint_bytes = self.serde.dumps_typed(checkpoint)
-        serialized_checkpoint = {
-            "type": checkpoint_type,
-            "data": checkpoint_bytes.hex()
-        }
+        serialized_checkpoint = {"type": checkpoint_type, "data": checkpoint_bytes.hex()}
 
         stmt = insert(LangGraphCheckpoint).values(
             thread_id=thread_id,
@@ -94,7 +88,7 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
         )
         await self.db.execute(stmt)
         await self.db.commit()
-        
+
         return config
 
     async def alist(
@@ -109,7 +103,7 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
         query = select(LangGraphCheckpoint)
         if config:
             query = query.where(LangGraphCheckpoint.thread_id == config["configurable"]["thread_id"])
-        
+
         query = query.order_by(LangGraphCheckpoint.checkpoint_id.desc())
         if limit:
             query = query.limit(limit)
@@ -128,7 +122,9 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
                 config={"configurable": {"thread_id": row.thread_id, "checkpoint_id": row.checkpoint_id}},
                 checkpoint=checkpoint,
                 metadata=row.metadata_json,
-                parent_config={"configurable": {"thread_id": row.thread_id, "checkpoint_id": row.parent_id}} if row.parent_id else None
+                parent_config={"configurable": {"thread_id": row.thread_id, "checkpoint_id": row.parent_id}}
+                if row.parent_id
+                else None,
             )
 
     async def aput_writes(
@@ -155,6 +151,7 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
     async def adelete_thread(self, thread_id: str) -> None:
         """Delete conversation history."""
         from sqlalchemy import delete
+
         stmt = delete(LangGraphCheckpoint).where(LangGraphCheckpoint.thread_id == thread_id)
         await self.db.execute(stmt)
         await self.db.commit()
@@ -167,10 +164,23 @@ class SqlAlchemyCheckpointSaver(BaseCheckpointSaver):
     def get_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         raise NotImplementedError("Use aget_tuple instead")
 
-    def put(self, config: RunnableConfig, checkpoint: Checkpoint, metadata: CheckpointMetadata, new_versions: ChannelVersions) -> RunnableConfig:
+    def put(
+        self,
+        config: RunnableConfig,
+        checkpoint: Checkpoint,
+        metadata: CheckpointMetadata,
+        new_versions: ChannelVersions,
+    ) -> RunnableConfig:
         raise NotImplementedError("Use aput instead")
 
-    def list(self, config: RunnableConfig | None, *, filter: dict[str, Any] | None = None, before: RunnableConfig | None = None, limit: int | None = None) -> Iterator[CheckpointTuple]:
+    def list(
+        self,
+        config: RunnableConfig | None,
+        *,
+        filter: dict[str, Any] | None = None,
+        before: RunnableConfig | None = None,
+        limit: int | None = None,
+    ) -> Iterator[CheckpointTuple]:
         raise NotImplementedError("Use alist instead")
 
     # Note: Modern LangGraph uses specialized interfaces, this is a simplified version

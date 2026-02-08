@@ -7,13 +7,11 @@ Extracts key entities (People, Projects, Systems) from messages and persists the
 import logging
 from typing import Any, Dict, List
 
-from langchain_openai import AzureChatOpenAI
 from pydantic import BaseModel, Field
 
+from ...agents.azure_openai import get_llm_service
 from ...core import config
 from ...core.graph_db import GraphDBClient
-
-from ...agents.azure_openai import get_llm_service
 
 logger = logging.getLogger(__name__)
 

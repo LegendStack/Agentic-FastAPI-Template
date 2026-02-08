@@ -5,21 +5,17 @@ Core story decomposition logic using LLM with structured output.
 Generates user stories from an epic description.
 """
 
-import json
 import logging
-import uuid
 from typing import Any
 
-
+from ....core.config import settings
 from ...azure_openai import LLMService, get_llm_service
 from ...structured_output import StructuredOutputValidator
+from ...vector_stores import VectorStoreFactory
 from ..config import BacklogAgentConfig
-from ..prompts import get_decompose_system_prompt, get_decompose_user_prompt, get_refine_system_prompt
+from ..prompts import get_decompose_system_prompt, get_decompose_user_prompt
 from ..schemas import AcceptanceCriteria, DecompositionResult, Epic, UserStory
 from ..state import BacklogAgentState
-from ...vector_stores import VectorStoreFactory
-from ....core.config import settings
-from ....core.db.database import async_get_db
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +108,7 @@ class DecomposeNode:
         llm_service: LLMService | None = None,
     ):
         self.config = config or BacklogAgentConfig()
-        # Double safety check: If use_mocks is not explicitly set to False in initialization, 
+        # Double safety check: If use_mocks is not explicitly set to False in initialization,
         # and we are in a factory or API context, ensure we respect the global override if provided.
         # But here, we just want to be sure it's not unintentionally True.
         self.llm_service = llm_service or get_llm_service()
@@ -128,7 +124,9 @@ class DecomposeNode:
         Returns:
             State update with stories and current_result
         """
-        logger.info(f"DecomposeNode: Starting decomposition (USE_MOCKS={self.config.USE_MOCKS}, global_settings={settings.BACKLOG_USE_MOCKS})")
+        logger.info(
+            f"DecomposeNode: Starting decomposition (USE_MOCKS={self.config.USE_MOCKS}, global_settings={settings.BACKLOG_USE_MOCKS})"
+        )
 
         parsed_epic = state.get("parsed_epic")
         if not parsed_epic:
@@ -146,31 +144,33 @@ class DecomposeNode:
                 # 1. Semantic Deduplication Check
                 duplicate_info = await self._check_duplicate_epic(parsed_epic)
                 if duplicate_info and self.config.PREVENT_DUPLICATE_DECOMPOSITION:
-                    logger.info(f"DecomposeNode: Semantic duplicate detected. Thread ID: {duplicate_info.get('thread_id')}")
-                    # If we had a way to return the old result, we would. 
+                    logger.info(
+                        f"DecomposeNode: Semantic duplicate detected. Thread ID: {duplicate_info.get('thread_id')}"
+                    )
+                    # If we had a way to return the old result, we would.
                     # For now, we continue but with a flag or warning.
-                
+
                 # 2. Retrieve similar stories for context (Phase 13)
                 reference_stories = await self._retrieve_reference_stories(parsed_epic)
-                
+
                 # 2. LLM Decomposition with context
                 story_template = state.get("story_template", self.config.STORY_TEMPLATE)
                 result, usage = await self._llm_decompose(
-                    parsed_epic, 
-                    reference_stories=reference_stories,
-                    story_template=story_template
+                    parsed_epic, reference_stories=reference_stories, story_template=story_template
                 )
 
             if not self.config.USE_MOCKS:
                 if not result.stories:
-                     logger.error("DecomposeNode: LLM returned empty stories list")
-                     return {"error": "Decomposition returned no user stories. Please try a more detailed epic description."}
+                    logger.error("DecomposeNode: LLM returned empty stories list")
+                    return {
+                        "error": "Decomposition returned no user stories. Please try a more detailed epic description."
+                    }
 
                 logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
                 # 3. Detect duplicates for generated stories
                 await self._detect_duplicates(result.stories)
-                
+
                 # 4. Archive this epic for future deduplication
                 await self._archive_epic(parsed_epic, state.get("thread_id"))
 
@@ -192,15 +192,11 @@ class DecomposeNode:
             store = VectorStoreFactory.get_store(None)
             if not self.llm_service:
                 self.llm_service = get_llm_service()
-                
+
             query_vector = await self.llm_service.get_embeddings(epic.description)
-            
+
             # Search for epics in the archive
-            results = await store.similarity_search(
-                query_vector, 
-                k=1, 
-                filters={"source_id": "epic_archive"}
-            )
+            results = await store.similarity_search(query_vector, k=1, filters={"source_id": "epic_archive"})
             if results:
                 match = results[0]
                 score = match.get("score", 0)
@@ -208,12 +204,8 @@ class DecomposeNode:
                 if score > 0.92:
                     logger.info(f"DecomposeNode: Found duplicate epic (score: {score:.4f})")
                     meta = match.get("metadata", {})
-                    return {
-                        "thread_id": meta.get("thread_id"),
-                        "title": meta.get("title"),
-                        "score": score
-                    }
-            
+                    return {"thread_id": meta.get("thread_id"), "title": meta.get("title"), "score": score}
+
             return None
         except Exception as e:
             logger.warning(f"DecomposeNode: Duplicate check failed - {e}")
@@ -221,16 +213,16 @@ class DecomposeNode:
 
     async def _archive_epic(self, epic: Epic, thread_id: str) -> None:
         """Archive epic description to allow future deduplication."""
-        if not thread_id: 
+        if not thread_id:
             return
-            
+
         try:
             store = VectorStoreFactory.get_store(None)
             if not self.llm_service:
                 self.llm_service = get_llm_service()
-                
+
             embedding = await self.llm_service.get_embeddings(epic.description)
-            
+
             doc = {
                 "content": epic.description,
                 "embedding": embedding,
@@ -238,15 +230,15 @@ class DecomposeNode:
                     "type": "epic",
                     "title": epic.title,
                     "thread_id": thread_id,
-                    "project_key": epic.project_key
+                    "project_key": epic.project_key,
                 },
                 "source_id": "epic_archive",
-                "tenant_id": "default" 
+                "tenant_id": "default",
             }
-            
+
             await store.add_documents([doc])
             logger.info(f"DecomposeNode: Archived epic '{epic.title}' for deduplication")
-            
+
         except Exception as e:
             logger.warning(f"DecomposeNode: Failed to archive epic - {e}")
 
@@ -256,10 +248,7 @@ class DecomposeNode:
         return MockDecomposeResult.generate(epic, self.config)
 
     async def _llm_decompose(
-        self, 
-        epic: Epic, 
-        reference_stories: list[UserStory] | None = None,
-        story_template: str = "standard"
+        self, epic: Epic, reference_stories: list[UserStory] | None = None, story_template: str = "standard"
     ) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to decompose the epic."""
         if not self.llm_service:
@@ -274,7 +263,7 @@ class DecomposeNode:
                 if s.acceptance_criteria:
                     context += "  Acceptance Criteria:\n"
                     for ac in s.acceptance_criteria:
-                        desc = ac.description if hasattr(ac, 'description') else str(ac)
+                        desc = ac.description if hasattr(ac, "description") else str(ac)
                         context += f"  * {desc}\n"
 
         # Build prompts
@@ -311,7 +300,7 @@ class DecomposeNode:
 
         # Ensure epic is set correctly
         result_data.epic = epic
-        
+
         logger.debug(f"DecomposeNode: Raw result stories ID: {[s.id for s in result_data.stories]}")
 
         return result_data, usage_metadata
@@ -323,54 +312,50 @@ class DecomposeNode:
             # We need a DB session for the factory, but Azure Search store doesn't actually use it
             # We'll use a dummy call to async_get_db if needed, but get_store(None) might work for Azure Search
             store = VectorStoreFactory.get_store(None)
-            
+
             # Embed the epic description
             if not self.llm_service:
                 self.llm_service = get_llm_service()
-            
+
             query_vector = await self.llm_service.get_embeddings(epic.description)
-            
+
             # Search for top candidates (fetching more for reranking)
             # Use hybrid search if available, otherwise vector search
             if hasattr(store, "similarity_search_hybrid"):
-                results = await store.similarity_search_hybrid(
-                    query=epic.description, 
-                    query_vector=query_vector, 
-                    k=10
-                )
+                results = await store.similarity_search_hybrid(query=epic.description, query_vector=query_vector, k=10)
             else:
                 results = await store.similarity_search(query_vector, k=10)
-                
+
             # Rerank results
             from ...reranking import KeywordBonusReranker, RerankingService
+
             reranker = RerankingService(KeywordBonusReranker(bonus_weight=0.5))
             results = await reranker.rerank(epic.description, results, top_k=3)
-            
+
             stories = []
             for r in results:
                 try:
                     score = r.get("score", 0)
                     content = r.get("content", "")
                     title = r.get("metadata", {}).get("title", "Past Story")
-                    
+
                     logger.info(f"DecomposeNode: Found potential reference - '{title}' (Score: {score:.4f})")
-                    
+
                     # Threshold for reference examples - only use if reasonably similar
                     # 0.3 is a more conservative threshold for Azure Search hybrid scores
                     if score < 0.3:
-                        logger.info(f"DecomposeNode: Skipping low-score reference story '{title}' (score: {score:.4f} < 0.3)")
+                        logger.info(
+                            f"DecomposeNode: Skipping low-score reference story '{title}' (score: {score:.4f} < 0.3)"
+                        )
                         continue
-                        
-                    stories.append(UserStory(
-                        id=r.get("id", "REF"),
-                        title=title,
-                        description=content[:500],
-                        acceptance_criteria=[] 
-                    ))
+
+                    stories.append(
+                        UserStory(id=r.get("id", "REF"), title=title, description=content[:500], acceptance_criteria=[])
+                    )
                 except Exception as e:
                     logger.warning(f"DecomposeNode: Error parsing reference story - {e}")
                     continue
-            
+
             if stories:
                 ref_titles = [s.title for s in stories]
                 logger.info(f"DecomposeNode: Using {len(stories)} reference stories: {ref_titles}")
@@ -395,22 +380,18 @@ class DecomposeNode:
             for story in stories:
                 # 1. Search for similar stories using hybrid search (Vector + Title)
                 query_vector = await self.llm_service.get_embeddings(story.description)
-                
+
                 # We use the title as search_text for better keyword matching
                 # and vector for semantic matching.
-                results = await store.similarity_search(
-                    query_vector, 
-                    k=1, 
-                    search_text=story.title
-                )
+                results = await store.similarity_search(query_vector, k=1, search_text=story.title)
 
                 if results:
                     top_match = results[0]
                     score = top_match.get("score", 0)
-                    
+
                     # Threshold for considering it a "Potential Duplicate"
                     # 0.1 is a more reliable threshold for Azure Search hybrid scores
-                    if score > 0.1: 
+                    if score > 0.1:
                         story.is_duplicate = True
                         match_title = top_match.get("metadata", {}).get("title", "Existing Story")
                         match_id = top_match.get("metadata", {}).get("story_id", "Unknown")

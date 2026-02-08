@@ -203,14 +203,12 @@ def get_decompose_user_prompt(
 
 
 def get_refine_system_prompt(
-    current_decomposition: str, 
-    story_template: str = "standard",
-    project_key: str | None = None
+    current_decomposition: str, story_template: str = "standard", project_key: str | None = None
 ) -> str:
     """Build the refinement system prompt with current state and project context."""
     project_context = f"Project {project_key}" if project_key else "General Project"
     return REFINE_SYSTEM_PROMPT.format(
-        current_decomposition=current_decomposition, 
+        current_decomposition=current_decomposition,
         project_context=project_context,
         story_template_instructions=STORY_TEMPLATE_INSTRUCTIONS.get(
             story_template, STORY_TEMPLATE_INSTRUCTIONS["standard"]

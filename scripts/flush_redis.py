@@ -1,4 +1,5 @@
 import redis
+
 from src.app.core.config import settings
 
 try:

@@ -85,23 +85,24 @@ class AuditLog(Base):
     Audit log for tracking agent actions and external system integrations.
     Designed to be extensible for future capabilities (e.g. Story Decomposition, Refinement).
     """
+
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(sa.Integer, primary_key=True, autoincrement=True, init=False)
 
     # Required fields (must come before fields with defaults in dataclass)
     action: Mapped[str] = mapped_column(sa.String(64), index=True)  # e.g., JIRA_EXPORT, CONTENT_GENERATION
-    resource_type: Mapped[str] = mapped_column(sa.String(64))       # e.g., EPIC, STORY, CRITERIA
-    
+    resource_type: Mapped[str] = mapped_column(sa.String(64))  # e.g., EPIC, STORY, CRITERIA
+
     # Optional/Default fields
     timestamp: Mapped[datetime] = mapped_column(sa.DateTime, default_factory=datetime.utcnow, index=True)
     user_id: Mapped[str | None] = mapped_column(sa.String(64), index=True, nullable=True, default=None)
     tenant_id: Mapped[str | None] = mapped_column(sa.String(64), index=True, default="default")
-    resource_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True, default=None) # e.g., Jira Key
-    
+    resource_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True, default=None)  # e.g., Jira Key
+
     # Details
     details: Mapped[dict] = mapped_column(sa.JSON, default_factory=dict)
     status: Mapped[str] = mapped_column(sa.String(32), default="SUCCESS")
-    
+
     # Context
     thread_id: Mapped[str | None] = mapped_column(sa.String(64), index=True, nullable=True, default=None)

@@ -4,7 +4,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.security_utils import TenantEncryption
-
 from ..models.agentic import DocumentSection
 from .base import BaseVectorStore
 
@@ -79,21 +78,23 @@ class PgVectorStore(BaseVectorStore):
         """
         # 1. Get Vector Results (Top K)
         vector_docs = await self.similarity_search(query_vector, k=k, filters=filters)
-        
+
         # 2. Get Keyword Results (Top K) via TSVector
         # Using simple 'english' configuration.
-        ts_query = sa.select(DocumentSection).where(
-            sa.func.to_tsvector("english", DocumentSection.content).match(query)
-        ).limit(k)
-        
+        ts_query = (
+            sa.select(DocumentSection)
+            .where(sa.func.to_tsvector("english", DocumentSection.content).match(query))
+            .limit(k)
+        )
+
         if filters:
             for key, value in filters.items():
                 if hasattr(DocumentSection, key):
                     ts_query = ts_query.where(getattr(DocumentSection, key) == value)
-                    
+
         result = await self.db.execute(ts_query)
         keyword_secs = result.scalars().all()
-        
+
         keyword_docs = [
             {
                 "id": s.id,
@@ -103,7 +104,7 @@ class PgVectorStore(BaseVectorStore):
                 "metadata": s.metadata_json,
                 "source_id": s.source_id,
                 "tenant_id": s.tenant_id,
-                 "score": 1.0 # Placeholder score
+                "score": 1.0,  # Placeholder score
             }
             for s in keyword_secs
         ]
@@ -111,12 +112,12 @@ class PgVectorStore(BaseVectorStore):
         # 3. Merge Strategies (Simple RRF-like or Union)
         # Map ID -> Doc
         merged = {}
-        
+
         # Add Vector Docs (weight 0.7)
         for i, doc in enumerate(vector_docs):
-            doc["score"] = 0.7 * (1 - (i / k)) # Simple rank decay
+            doc["score"] = 0.7 * (1 - (i / k))  # Simple rank decay
             merged[doc["id"]] = doc
-            
+
         # Add Keyword Docs (weight 0.3)
         for i, doc in enumerate(keyword_docs):
             if doc["id"] in merged:

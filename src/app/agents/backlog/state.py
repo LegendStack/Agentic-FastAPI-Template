@@ -7,8 +7,6 @@ Each node can read and update specific fields of this state.
 
 from typing import Any
 
-from typing_extensions import TypedDict
-
 from ...agents.base import BaseAgentState
 from .schemas import DecompositionResult, Epic, UserStory
 

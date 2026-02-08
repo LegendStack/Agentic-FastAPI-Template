@@ -5,7 +5,6 @@ from typing import Any
 from pydantic import SecretStr, computed_field
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-
 # HACK: Force purge of poisoned environment variables that persist in the session
 # This ensures we load from .env instead of the stale environment
 for key in ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN", "JIRA_PROJECTS"]:
@@ -13,6 +12,7 @@ for key in ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN", "JIRA_PROJECTS"]:
         # Check if it matches the stale "mtall" value to be safe, or just nuke it
         # Nuke it to be sure we prefer .env for these specific keys
         del os.environ[key]
+
 
 class AppSettings(BaseSettings):
     APP_NAME: str = "Agentic FastAPI Template"
@@ -358,7 +358,7 @@ class Settings(
     ENABLE_ENTITY_MEMORY: bool = False  # Track entities across threads
     ENTITY_EXTRACTION_MODEL: str = "gpt-4o"
     ENTITY_SIMILARITY_THRESHOLD: float = 0.85
-    
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def REDIS_URL(self) -> str:
@@ -382,11 +382,12 @@ class Settings(
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         from .vault import VaultSettingsSource
+
         return (
             init_settings,
             env_settings,
             dotenv_settings,
-            VaultSettingsSource(settings_cls), # Vault takes precedence over defaults, but env/init override it? 
+            VaultSettingsSource(settings_cls),  # Vault takes precedence over defaults, but env/init override it?
             # Ideally: Init > Env > DotEnv > Vault > Defaults
             # Or: Init > Env > Vault > DotEnv > Defaults?
             # User usually wants Vault to provide secrets that are NOT in env.

@@ -1,11 +1,12 @@
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.append(os.path.join(os.getcwd(), "src"))
 
 from app.core.db.database import async_engine
+
 
 async def test_db():
     print("Testing database connection...")
@@ -17,6 +18,7 @@ async def test_db():
     except Exception as e:
         print(f"Database connection failed: {e}")
         return False
+
 
 if __name__ == "__main__":
     asyncio.run(test_db())

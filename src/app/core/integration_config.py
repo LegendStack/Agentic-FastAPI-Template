@@ -274,7 +274,9 @@ def configure_integrations(factory: IntegrationClientFactory | None = None) -> N
     # -------------------------------------------------------------------------
     # Semantic Caching (V4.0)
     # -------------------------------------------------------------------------
-    logger.info(f"Checking semantic cache: ENABLE_SEMANTIC_CACHE={getattr(settings, 'ENABLE_SEMANTIC_CACHE', False)}, set_llm_cache={set_llm_cache is not None}, RedisSemanticCache={RedisSemanticCache is not None}")
+    logger.info(
+        f"Checking semantic cache: ENABLE_SEMANTIC_CACHE={getattr(settings, 'ENABLE_SEMANTIC_CACHE', False)}, set_llm_cache={set_llm_cache is not None}, RedisSemanticCache={RedisSemanticCache is not None}"
+    )
     if getattr(settings, "ENABLE_SEMANTIC_CACHE", False):
         if set_llm_cache and RedisSemanticCache:
             try:

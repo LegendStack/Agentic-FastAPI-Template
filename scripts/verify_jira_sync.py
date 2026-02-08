@@ -1,16 +1,11 @@
 import requests
-import json
-import time
 
 url_decompose = "http://localhost:8635/api/v1/backlog/decompose"
 url_export_base = "http://localhost:8635/api/v1/backlog/export"
 
 # 1. Decompose first
 print("--- Step 1: Decomposing ---")
-payload_decomp = {
-    "epic_description": "Sample Integration Epic",
-    "project_key": "KAN"
-}
+payload_decomp = {"epic_description": "Sample Integration Epic", "project_key": "KAN"}
 resp_decomp = requests.post(url_decompose, json=payload_decomp)
 thread_id = resp_decomp.json().get("thread_id")
 print(f"Thread ID: {thread_id}")
@@ -25,7 +20,7 @@ print(f"Has Stories: {'stories' in data}")
 if data.get("stories"):
     print(f"Story Count: {len(data['stories'])}")
     print(f"First Story Jira Key: {data['stories'][0].get('jira_key')}")
-    if data['stories'][0].get('jira_key'):
+    if data["stories"][0].get("jira_key"):
         print("[PASS] Stories have Jira keys.")
     else:
         print("[FAIL] Stories missing Jira keys in response.")

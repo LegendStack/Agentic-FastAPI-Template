@@ -30,7 +30,9 @@ class BacklogAgentConfig:
     """
 
     # === Core Settings ===
-    USE_MOCKS: bool = field(default_factory=lambda: settings.BACKLOG_USE_MOCKS)  # Use mock LLM for testing (no API calls)
+    USE_MOCKS: bool = field(
+        default_factory=lambda: settings.BACKLOG_USE_MOCKS
+    )  # Use mock LLM for testing (no API calls)
 
     # === Output Configuration ===
     DEFAULT_OUTPUT_FORMAT: Literal["json", "markdown", "jira"] = "json"
@@ -58,7 +60,9 @@ class BacklogAgentConfig:
     JIRA_EPIC_ISSUE_TYPE: str = field(default_factory=lambda: settings.JIRA_EPIC_ISSUE_TYPE)
     JIRA_EPIC_NAME_FIELD: str = field(default_factory=lambda: settings.JIRA_EPIC_NAME_FIELD)
     JIRA_EPIC_LINK_FIELD: str = "customfield_10014"  # Epic link custom field
-    JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA)
+    JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA: str | None = field(
+        default_factory=lambda: settings.JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA
+    )
     JIRA_FIELD_MAP_TECH_NOTES: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_TECH_NOTES)
     JIRA_FIELD_MAP_COMPLEXITY: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_COMPLEXITY)
     JIRA_FIELD_MAP_DEPENDENCIES: str | None = field(default_factory=lambda: settings.JIRA_FIELD_MAP_DEPENDENCIES)

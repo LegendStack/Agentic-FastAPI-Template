@@ -1,11 +1,11 @@
 from fastapi import APIRouter
 
 from ...core.config import AuthProvider, settings
+from .admin_metrics import router as admin_metrics_router
 from .agents import router as agents_router
 from .backlog import router as backlog_router
-from .jira import router as jira_router
-from .admin_metrics import router as admin_metrics_router
 from .health import router as health_router
+from .jira import router as jira_router
 from .login import router as login_router
 from .logout import router as logout_router
 from .posts import router as posts_router

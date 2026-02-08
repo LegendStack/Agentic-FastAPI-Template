@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...agents.azure_openai import LLMService, get_llm_service
+from ...agents.azure_openai import get_llm_service
 from ...agents.background import enqueue_agent_task, get_task_status
 from ...agents.hitl import hitl_manager
 from ...agents.indexers import DocumentIndexer

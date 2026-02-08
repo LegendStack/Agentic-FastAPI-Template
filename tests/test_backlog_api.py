@@ -2,7 +2,6 @@
 Integration tests for the Backlog Assistant API.
 """
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -23,7 +22,7 @@ class TestBacklogAPI:
         payload = {
             "epic_description": "Add user authentication with email and password",
             "context": "We use Azure AD",
-            "output_format": "json"
+            "output_format": "json",
         }
         response = client.post("/api/v1/backlog/decompose", json=payload)
         assert response.status_code == 200
@@ -36,17 +35,12 @@ class TestBacklogAPI:
     def test_chat_refinement(self, client: TestClient):
         """Test POST /api/v1/backlog/chat/{thread_id}"""
         # First decompose to get a thread_id
-        decompose_payload = {
-            "epic_description": "Initial Epic for Chat Test",
-            "output_format": "json"
-        }
+        decompose_payload = {"epic_description": "Initial Epic for Chat Test", "output_format": "json"}
         initial_response = client.post("/api/v1/backlog/decompose", json=decompose_payload)
         thread_id = initial_response.json()["thread_id"]
 
         # Now chat to refine
-        chat_payload = {
-            "message": "Add more edge cases"
-        }
+        chat_payload = {"message": "Add more edge cases"}
         response = client.post(f"/api/v1/backlog/chat/{thread_id}", json=chat_payload)
         assert response.status_code == 200
         data = response.json()
@@ -62,24 +56,21 @@ class TestBacklogAPI:
                     "id": "OLD-01",
                     "title": "Existing Story",
                     "description": "This already exists",
-                    "acceptance_criteria": []
+                    "acceptance_criteria": [],
                 }
             ],
             "message": "Convert to BDD",
-            "output_format": "json"
+            "output_format": "json",
         }
         response = client.post("/api/v1/backlog/refine", json=refine_payload)
         assert response.status_code == 200
         data = response.json()
         assert data["thread_id"] is not None
         assert data["story_count"] >= 1
-        
+
         # Test unified /chat as well
         thread_id = "unified-test-thread"
-        unified_payload = {
-            "message": "Refine these stories",
-            "stories": refine_payload["stories"]
-        }
+        unified_payload = {"message": "Refine these stories", "stories": refine_payload["stories"]}
         response = client.post(f"/api/v1/backlog/chat/{thread_id}", json=unified_payload)
         assert response.status_code == 200
         assert response.json()["thread_id"] == thread_id
@@ -87,17 +78,14 @@ class TestBacklogAPI:
     def test_get_stories(self, client: TestClient):
         """Test GET /api/v1/backlog/stories/{thread_id}"""
         # Note: Since we are using TestClient and SqlAlchemyCheckpointSaver (if and only if configured),
-        # we need to ensure the state is persisted. 
+        # we need to ensure the state is persisted.
         # By default in mocks, it might not persist unless checkpointer is active.
         # But decompose returns stories anyway.
-        
-        decompose_payload = {
-            "epic_description": "Get Stories Test Epic",
-            "output_format": "json"
-        }
+
+        decompose_payload = {"epic_description": "Get Stories Test Epic", "output_format": "json"}
         initial_response = client.post("/api/v1/backlog/decompose", json=decompose_payload)
         thread_id = initial_response.json()["thread_id"]
-        
+
         response = client.get(f"/api/v1/backlog/stories/{thread_id}")
         # If persistence is not enabled in conftest/setup for tests, this might return 404 or empty.
         # However, the repo usually has SqlAlchemyCheckpointSaver enabled in the get_agent factory if db is provided.
@@ -111,8 +99,8 @@ class TestBacklogAPI:
     def test_error_handling(self, client: TestClient):
         """Test error handling with empty input."""
         payload = {
-            "epic_description": "", # Too short
-            "output_format": "json"
+            "epic_description": "",  # Too short
+            "output_format": "json",
         }
         response = client.post("/api/v1/backlog/decompose", json=payload)
         assert response.status_code == 422

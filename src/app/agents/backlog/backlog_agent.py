@@ -35,20 +35,20 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from ...core.config import settings
+from ..conversations import ConversationService
 from .config import BacklogAgentConfig
 from .nodes import (
+    CriticNode,
     DecomposeNode,
     ExportNode,
     FormatNode,
     InputNode,
     PrioritizeNode,
     RefineNode,
-    CriticNode,
     TestGenNode,
 )
 from .schemas import DecompositionResult
 from .state import BacklogAgentState
-from ..conversations import ConversationService
 
 logger = logging.getLogger(__name__)
 
@@ -105,18 +105,18 @@ class BacklogAssistantAgent:
         self.graph = self._build_graph()
 
         logger.info(f"BacklogAssistantAgent initialized with features: {self.config.get_enabled_features()}")
-        
+
     async def initialize(self) -> None:
         """
         Ensure all required infrastructure is ready.
         Call this before using the agent for the first time.
         """
         logger.info("BacklogAssistantAgent: Initializing infrastructure...")
-        
+
         # 1. Ensure RAG index exists if using Azure Search
         from ...core.config import RAGBackend, settings
         from ..vector_stores import VectorStoreFactory
-        
+
         if settings.RAG_BACKEND == RAGBackend.AZURE_SEARCH:
             try:
                 # We don't need a DB session yet just to check/create the index
@@ -127,7 +127,7 @@ class BacklogAssistantAgent:
                 logger.error(f"BacklogAssistantAgent: Failed to initialize Azure Search index - {e}")
                 # We don't raise here to allow the agent to start in degraded mode if needed
                 # (e.g. if the user just wants to decompose without indexing)
-        
+
         logger.info("BacklogAssistantAgent: Infrastructure initialization complete.")
 
     def _init_nodes(self) -> None:
@@ -180,13 +180,13 @@ class BacklogAssistantAgent:
         # Decompose and Refine go to Critic
         workflow.add_edge("decompose", "critic")
         workflow.add_edge("refine", "critic")
-        
+
         # Critic goes to parallel branches: Prioritize and TestGen
         # Note: LangGraph doesn't support true parallel branching easily without fan-out/fan-in.
         # We'll sequence them: Critic -> TestGen -> Prioritize
         workflow.add_edge("critic", "test_gen")
         workflow.add_edge("test_gen", "prioritize")
-        
+
         # Prioritize goes to format
         workflow.add_edge("prioritize", "format")
         workflow.add_edge("save_to_jira", "format")
@@ -253,18 +253,20 @@ class BacklogAssistantAgent:
                 logger.info(f"Retrieved existing decomposition for thread {dup_thread_id}")
                 result = await self.get_stories(dup_thread_id)
                 if result.get("stories"):
-                     current_result = result.get("result", {})
-                     return {
-                         "thread_id": dup_thread_id,
-                         "response": current_result,
-                         "formatted_output": None,
-                         "stories": result.get("stories", []),
-                         "summary": current_result.get("summary") if isinstance(current_result, dict) else getattr(current_result, "summary", None),
-                         "story_count": len(result.get("stories", [])),
-                         "output_format": output_format,
-                         "metadata": {**result.get("metadata", {}), "is_duplicate": True},
-                         "usage": {},
-                     }
+                    current_result = result.get("result", {})
+                    return {
+                        "thread_id": dup_thread_id,
+                        "response": current_result,
+                        "formatted_output": None,
+                        "stories": result.get("stories", []),
+                        "summary": current_result.get("summary")
+                        if isinstance(current_result, dict)
+                        else getattr(current_result, "summary", None),
+                        "story_count": len(result.get("stories", [])),
+                        "output_format": output_format,
+                        "metadata": {**result.get("metadata", {}), "is_duplicate": True},
+                        "usage": {},
+                    }
 
         return await self.chat(
             thread_id=thread_id,
@@ -282,26 +284,22 @@ class BacklogAssistantAgent:
         """
         if not self.checkpointer:
             return None
-            
+
         try:
-            from ..vector_stores import VectorStoreFactory
             from ..azure_openai import get_llm_service
-            
+            from ..vector_stores import VectorStoreFactory
+
             # We initialize store without DB session as we only read
             store = VectorStoreFactory.get_store(None)
             llm_service = get_llm_service()
-            
+
             # Use only first 1000 chars for embedding to save tokens/time
             query_vector = await llm_service.get_embeddings(epic_description[:1000])
-            
+
             # Search for epics in the archive
             # Note: We filter by source_id="epic_archive" which is set by DecomposeNode._archive_epic
-            results = await store.similarity_search(
-                query_vector, 
-                k=1, 
-                filters={"source_id": "epic_archive"}
-            )
-            
+            results = await store.similarity_search(query_vector, k=1, filters={"source_id": "epic_archive"})
+
             if results:
                 match = results[0]
                 score = match.get("score", 0)
@@ -310,9 +308,11 @@ class BacklogAssistantAgent:
                     meta = match.get("metadata", {})
                     thread_id = meta.get("thread_id")
                     if thread_id:
-                        logger.info(f"BacklogAssistantAgent: Found duplicate epic (score: {score:.4f}) -> thread {thread_id}")
+                        logger.info(
+                            f"BacklogAssistantAgent: Found duplicate epic (score: {score:.4f}) -> thread {thread_id}"
+                        )
                         return thread_id
-            
+
             return None
         except Exception as e:
             logger.warning(f"BacklogAssistantAgent: Duplicate epic check failed - {e}")
@@ -322,8 +322,9 @@ class BacklogAssistantAgent:
         """Generate a concise 3-5 word title from the user message."""
         try:
             from ..azure_openai import get_llm_service
+
             llm = get_llm_service()
-            
+
             prompt = f"""Generate a concise, professional title (3-5 words) for a JIRA epic decomposition task based on this user message.
             
             User Message: {message}
@@ -335,7 +336,7 @@ class BacklogAssistantAgent:
             4. Focus on the core business feature or project being described.
             
             Title:"""
-            
+
             response = await llm.chat([{"role": "user", "content": prompt}])
             title = response.content.strip().strip('"').strip("'")
             # Fallback if LLM gives something too long or empty
@@ -387,7 +388,7 @@ class BacklogAssistantAgent:
                 saved_state = await self.graph.aget_state(config)
                 if saved_state and saved_state.values:
                     existing_state = saved_state.values
-                    
+
                     # Lock Check: Prevent edits if already exported to Jira
                     if existing_state.get("is_locked"):
                         logger.warning(f"BacklogAgent: Rejected chat for locked thread {thread_id}")
@@ -404,8 +405,8 @@ class BacklogAssistantAgent:
         # Build new state
         messages = existing_state.get("messages", [])
         messages.append({"role": "user", "content": message})
-        
-        is_first = not existing_state.get('stories')
+
+        is_first = not existing_state.get("stories")
         logger.info(f"BacklogAssistantAgent: Chat loop starting. is_first={is_first}")
 
         initial_state: BacklogAgentState = {
@@ -434,6 +435,7 @@ class BacklogAssistantAgent:
             # Sync with ConversationService for history tracking
             if hasattr(self.checkpointer, "db"):
                 from ..conversations import ConversationService
+
                 conversation_service = ConversationService(self.checkpointer.db)
 
                 # Ensure conversation exists
@@ -504,7 +506,7 @@ class BacklogAssistantAgent:
             from ..conversations import ConversationService
 
             conversation_service = ConversationService(self.checkpointer.db)
-            
+
             # Extract token counts
             usage = final_state.get("usage_metadata") or {}
             input_tokens = usage.get("input_tokens", 0)
@@ -515,8 +517,8 @@ class BacklogAssistantAgent:
             assistant_content = assistant_messages[-1].get("content") if assistant_messages else current_result.summary
 
             await conversation_service.add_message(
-                thread_id=thread_id, 
-                role="assistant", 
+                thread_id=thread_id,
+                role="assistant",
                 content=assistant_content,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -531,9 +533,9 @@ class BacklogAssistantAgent:
         try:
             # Only log if it was a refinement (not first message) and we have a user_id
             if not final_state.get("is_first_message", True) and (user_id or existing_state.get("user_id")):
-                from ...services.audit_service import AuditService
                 from ...core.db.database import async_get_db
-                
+                from ...services.audit_service import AuditService
+
                 # Resolve user_id if not passed directly
                 effective_user_id = user_id or existing_state.get("user_id")
 
@@ -542,13 +544,13 @@ class BacklogAssistantAgent:
                     "story_count": len(final_state.get("stories", [])),
                     "project_key": project_key or final_state.get("project_key"),
                 }
-                
+
                 async with async_get_db() as db:
                     audit = AuditService(db)
                     await audit.log_event(
                         action="REFINEMENT",
                         resource_type="BACKLOG",
-                        resource_id=thread_id, # Use thread_id as resource for backlog refinement
+                        resource_id=thread_id,  # Use thread_id as resource for backlog refinement
                         details=details,
                         user_id=effective_user_id,
                         thread_id=thread_id,
@@ -614,24 +616,24 @@ class BacklogAssistantAgent:
 
         # Run save node
         save_result = await self.save_node(state)
-        
+
         if save_result.get("stories") and self.checkpointer:
             # Prepare updates
             new_stories = save_result["stories"]
             update_dict = {
                 "stories": new_stories,
-                "is_locked": True  # Phase 8 Fix: Persist lock status
+                "is_locked": True,  # Phase 8 Fix: Persist lock status
             }
-            
+
             # Post links back to conversation and update state with message
             if hasattr(self.checkpointer, "db"):
                 conversation_service = ConversationService(self.checkpointer.db)
-                
+
                 # save_result IS the dictionary returned by ExportNode.__call__
                 # which contains "export_result"
                 export_result = save_result.get("export_result", {})
                 issues = export_result.get("issues", [])
-                
+
                 if issues:
                     # Separate Epic from stories
                     epic_key = export_result.get("epic_key")
@@ -639,14 +641,14 @@ class BacklogAssistantAgent:
                     # Also check issues list for the epic_key in case internal_id isn't "EPIC"
                     if not epic_issue and epic_key:
                         epic_issue = next((i for i in issues if i.get("jira_key") == epic_key), None)
-                    
+
                     story_issues = [i for i in issues if i != epic_issue]
-                    
+
                     links_text = "🚀 **JIRA issues saved successfully!**\n\n"
-                    
+
                     if epic_key:
                         if epic_issue:
-                            links_text += f"**Epic Created/Linked:**\n"
+                            links_text += "**Epic Created/Linked:**\n"
                             links_text += f"- [{epic_issue['jira_key']}]({epic_issue['url']}) - {epic_issue.get('summary', 'Parent Epic')}\n\n"
                         else:
                             base_url = settings.JIRA_URL or "https://jira.atlassian.net"
@@ -654,31 +656,35 @@ class BacklogAssistantAgent:
                             parsed_epic = state.get("parsed_epic")
                             if parsed_epic:
                                 # parsed_epic might be a dict or a model
-                                summary = parsed_epic.title if hasattr(parsed_epic, 'title') else parsed_epic.get('title', '')
-                            
-                            links_text += f"**Linked to Parent Epic:**\n"
-                            links_text += f"- [{epic_key}]({base_url}/browse/{epic_key}){f' - {summary}' if summary else ''}\n\n"
-                        
+                                summary = (
+                                    parsed_epic.title if hasattr(parsed_epic, "title") else parsed_epic.get("title", "")
+                                )
+
+                            links_text += "**Linked to Parent Epic:**\n"
+                            links_text += (
+                                f"- [{epic_key}]({base_url}/browse/{epic_key}){f' - {summary}' if summary else ''}\n\n"
+                            )
+
                         links_text += "**User Stories Decomposed:**\n"
                     else:
                         links_text += "**User Stories Created:**\n"
-                    
+
                     for issue in story_issues:
                         links_text += f"- [{issue['jira_key']}]({issue['url']}) - {issue.get('summary', '')}\n"
-                    
+
                     try:
                         await conversation_service.add_message(
-                            thread_id=thread_id,
-                            role="assistant",
-                            content=links_text
+                            thread_id=thread_id, role="assistant", content=links_text
                         )
                         # Add to graph state messages as well so it appears in get_stories
                         messages = state.get("messages", [])
                         new_message = {"role": "assistant", "content": links_text}
                         update_dict["messages"] = messages + [new_message]
-                        
+
                     except Exception:
-                        logger.exception(f"BacklogAssistantAgent: Failed to post Jira links message to thread {thread_id}")
+                        logger.exception(
+                            f"BacklogAssistantAgent: Failed to post Jira links message to thread {thread_id}"
+                        )
 
             # Update state ONCE with stories and potentially new message
             new_state = {**state, **update_dict}

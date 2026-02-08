@@ -4,13 +4,14 @@ Backlog Assistant Agent Tests
 Unit tests for the Story Decomposition Agent.
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from src.app.agents.backlog import (
+    AcceptanceCriteria,
     BacklogAgentConfig,
     BacklogAssistantAgent,
-    AcceptanceCriteria,
     DecompositionResult,
     Epic,
     UserStory,
@@ -22,7 +23,6 @@ from src.app.agents.backlog.nodes import (
     RefineNode,
 )
 from src.app.agents.backlog.state import BacklogAgentState
-
 
 # === Schema Tests ===
 
@@ -447,9 +447,7 @@ class TestBacklogAssistantAgent:
         """Test basic epic decomposition."""
         agent = BacklogAssistantAgent()
 
-        result = await agent.decompose(
-            "Add user authentication with email and password"
-        )
+        result = await agent.decompose("Add user authentication with email and password")
 
         assert result.get("error") is None
         assert result.get("thread_id") is not None
@@ -510,7 +508,6 @@ class TestIntegration:
         assert "STORY-" in formatted  # Has story IDs
 
 
-
 class TestRefinementFlow:
     """Test the 'Dumb UI / Smart Agent' refinement flow."""
 
@@ -532,9 +529,7 @@ class TestRefinementFlow:
         # User message for refinement
         message = "Add a technical note about database migrations"
 
-        result = await agent.chat(
-            thread_id="test-hydration", message=message, initial_stories=existing_stories
-        )
+        result = await agent.chat(thread_id="test-hydration", message=message, initial_stories=existing_stories)
 
         assert result.get("error") is None
         assert result.get("metadata", {}).get("is_refinement") is True

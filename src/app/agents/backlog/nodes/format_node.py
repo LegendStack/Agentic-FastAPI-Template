@@ -78,7 +78,7 @@ class FormatNode:
             messages = state.get("messages", [])
             if current_result and current_result.summary:
                 assistant_content = current_result.summary
-                
+
                 # If we just performed an export, the summary might be empty or generic.
                 # FormatNode appends export details to formatted_output; we should also add to message.
                 if export_result:
@@ -87,7 +87,9 @@ class FormatNode:
                     if issues:
                         assistant_content += "\n\n**Created JIRA Issues:**\n"
                         for issue in issues:
-                            assistant_content += f"- [{issue.get('jira_key')}]({issue.get('url')}) - {issue.get('summary', '')}\n"
+                            assistant_content += (
+                                f"- [{issue.get('jira_key')}]({issue.get('url')}) - {issue.get('summary', '')}\n"
+                            )
 
                 messages = messages + [{"role": "assistant", "content": assistant_content}]
 

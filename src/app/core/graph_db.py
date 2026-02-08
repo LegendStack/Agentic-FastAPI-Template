@@ -5,7 +5,7 @@ Client for interaction with Neo4j Graph Database.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from neo4j import AsyncGraphDatabase, GraphDatabase
 
@@ -47,7 +47,7 @@ class GraphDBClient:
         if self._async_driver:
             await self._async_driver.close()
 
-    async def execute_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def execute_query(self, query: str, parameters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
         """
         Executes a Cypher query asynchronously.
         """

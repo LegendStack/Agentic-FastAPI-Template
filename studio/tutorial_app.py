@@ -13,15 +13,16 @@ Run with:
     streamlit run studio/tutorial_app.py
 """
 
-import streamlit as st
 import asyncio
 import sys
 from pathlib import Path
 
+import streamlit as st
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from app.agents.demo import LegendDemoAgent, DemoAgentConfig
+from app.agents.demo import DemoAgentConfig, LegendDemoAgent
 
 # === Page Config ===
 st.set_page_config(
@@ -32,7 +33,8 @@ st.set_page_config(
 )
 
 # === Custom CSS ===
-st.markdown("""
+st.markdown(
+    """
 <style>
     .main-header {
         font-size: 2.5rem;
@@ -71,7 +73,9 @@ st.markdown("""
         background: #667eea;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # === Session State ===
 if "agent" not in st.session_state:
@@ -87,16 +91,12 @@ if "config" not in st.session_state:
 with st.sidebar:
     st.markdown("## 🎛️ Feature Toggles")
     st.caption("Enable/disable features to see how the agent changes.")
-    
-    st.session_state.config.ENABLE_PII_GUARD = st.toggle(
-        "🛡️ PII Guard", value=True, help="Mask sensitive information"
-    )
+
+    st.session_state.config.ENABLE_PII_GUARD = st.toggle("🛡️ PII Guard", value=True, help="Mask sensitive information")
     st.session_state.config.ENABLE_MODERATION = st.toggle(
         "⚖️ Content Moderation", value=True, help="Filter harmful content"
     )
-    st.session_state.config.ENABLE_RAG = st.toggle(
-        "📚 RAG Retrieval", value=True, help="Vector-based document search"
-    )
+    st.session_state.config.ENABLE_RAG = st.toggle("📚 RAG Retrieval", value=True, help="Vector-based document search")
     st.session_state.config.ENABLE_GRAPH_RAG = st.toggle(
         "🔗 Graph-RAG", value=True, help="Knowledge graph relationships"
     )
@@ -112,12 +112,10 @@ with st.sidebar:
     st.session_state.config.ENABLE_HITL = st.toggle(
         "👤 Human-in-the-Loop", value=False, help="Require approval for actions"
     )
-    st.session_state.config.ENABLE_COST_TRACKING = st.toggle(
-        "💰 Cost Tracking", value=True, help="Monitor token usage"
-    )
-    
+    st.session_state.config.ENABLE_COST_TRACKING = st.toggle("💰 Cost Tracking", value=True, help="Monitor token usage")
+
     st.divider()
-    
+
     if st.button("🔄 Reset Agent", use_container_width=True):
         st.session_state.agent = None
         st.session_state.messages = []
@@ -354,74 +352,76 @@ st.markdown(current["content"])
 if current.get("interactive", False):
     st.divider()
     st.markdown("### 💬 Try It")
-    
+
     # Initialize agent if needed
     if st.session_state.agent is None:
         st.session_state.agent = LegendDemoAgent(config=st.session_state.config)
-    
+
     # Chat input
     user_input = st.chat_input("Type your message...")
-    
+
     # Display chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if msg.get("features"):
                 st.caption(f"📊 Features: {', '.join(msg['features'])}")
-    
+
     if user_input:
         # Add user message
         st.session_state.messages.append({"role": "user", "content": user_input})
-        
+
         with st.chat_message("user"):
             st.markdown(user_input)
-        
+
         # Get agent response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 # Recreate agent with current config
                 st.session_state.agent = LegendDemoAgent(config=st.session_state.config)
-                
+
                 # Run async
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
                     result = loop.run_until_complete(
-                        st.session_state.agent.chat(
-                            user_input,
-                            thread_id="tutorial-session"
-                        )
+                        st.session_state.agent.chat(user_input, thread_id="tutorial-session")
                     )
                 finally:
                     loop.close()
-                
+
                 st.markdown(result["response"])
-                
+
                 features = result.get("features_used", [])
                 if features:
                     st.caption(f"📊 Features: {', '.join(features)}")
-                
+
                 if result.get("cache_hit"):
                     st.info("⚡ Served from semantic cache!")
-                
+
                 # Show cost info
                 cost_info = result.get("cost_info", {})
                 if cost_info.get("estimated_cost_usd"):
                     st.caption(f"💰 Est. Cost: ${cost_info['estimated_cost_usd']:.6f}")
-                
+
                 # Save to history
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": result["response"],
-                    "features": features,
-                })
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": result["response"],
+                        "features": features,
+                    }
+                )
 
 # === Footer ===
 st.divider()
-st.markdown("""
+st.markdown(
+    """
 <div style="text-align: center; color: #666; font-size: 0.8rem;">
     LegendStack Agentic AI Framework | 
     <a href="https://github.com/LegendStack/agentic-fastapi-template" target="_blank">GitHub</a> | 
     <a href="https://legendstack.github.io/agentic-fastapi-template/" target="_blank">Documentation</a>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

@@ -77,12 +77,7 @@ class ConversationService:
 
         if days_limit:
             min_date = datetime.utcnow() - timedelta(days=days_limit)
-            query = query.where(
-                sa.or_(
-                    Conversation.updated_at >= min_date,
-                    Conversation.created_at >= min_date
-                )
-            )
+            query = query.where(sa.or_(Conversation.updated_at >= min_date, Conversation.created_at >= min_date))
 
         query = query.order_by(Conversation.updated_at.desc()).offset(offset).limit(limit)
         result = await self.db.execute(query)
@@ -102,15 +97,15 @@ class ConversationService:
         """Update conversation metadata."""
         conv = await self.get_conversation(thread_id)
         if conv:
-             current_metadata = dict(conv.metadata_json or {})
-             current_metadata.update(metadata)
-             await self.db.execute(
-                 update(Conversation)
-                 .where(Conversation.thread_id == thread_id)
-                 .values(metadata_json=current_metadata, updated_at=datetime.utcnow())
-             )
-             await self.db.commit()
-             return conv
+            current_metadata = dict(conv.metadata_json or {})
+            current_metadata.update(metadata)
+            await self.db.execute(
+                update(Conversation)
+                .where(Conversation.thread_id == thread_id)
+                .values(metadata_json=current_metadata, updated_at=datetime.utcnow())
+            )
+            await self.db.commit()
+            return conv
         return None
 
     async def archive_conversation(self, thread_id: str) -> bool:

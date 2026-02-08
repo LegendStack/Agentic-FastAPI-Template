@@ -143,7 +143,7 @@ class KeywordBonusReranker(BaseReranker):
     Simple reranker based on keyword density.
     Useful when heavier models (sentence-transformers) are unavailable.
     """
-    
+
     def __init__(self, bonus_weight: float = 0.5):
         self.bonus_weight = bonus_weight
 
@@ -151,22 +151,22 @@ class KeywordBonusReranker(BaseReranker):
         """Boost score based on term overlap."""
         if not documents:
             return []
-            
+
         terms = set(query.lower().split())
-        
+
         for doc in documents:
             content = doc.get("content", "").lower()
             overlap = sum(1 for term in terms if term in content)
-            
+
             # normalize overlap by number of terms
             keyword_score = overlap / len(terms) if terms else 0
-            
+
             # Combine with existing score if any, or seed with keyword score
-            base_score = doc.get("score", 0.5) # Default to mid-range if no score
-            
+            base_score = doc.get("score", 0.5)  # Default to mid-range if no score
+
             # Weighted combo
             doc["rerank_score"] = base_score + (keyword_score * self.bonus_weight)
-            
+
         documents.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
         return documents[:top_k]
 

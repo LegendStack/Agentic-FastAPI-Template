@@ -1,4 +1,4 @@
-import os
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from .admin.initialize import create_admin_interface
 from .api import router
-import logging
+
 logger = logging.getLogger(__name__)
 
 from .core.config import settings
@@ -24,6 +24,7 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
     # 1. Configure all integrations
     try:
         from .core.integration_config import configure_integrations
+
         configure_integrations()
     except Exception as e:
         logger.warning(f"Integration configuration failed: {e}")
@@ -32,13 +33,14 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.OTEL_ENABLED:
         try:
             from .agents.observability import setup_telemetry
+
             setup_telemetry(app=app)
         except Exception as e:
             logger.warning(f"OpenTelemetry setup failed: {e}")
 
     # 3. Create default lifespan
     default_lifespan = lifespan_factory(settings)
-    
+
     # 4. Run default lifespan and our custom initialization
     try:
         async with default_lifespan(app):
@@ -48,6 +50,7 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         # 5. Global resource cleanup
         from .agents.azure_openai import get_llm_service
+
         try:
             llm_service = get_llm_service()
             await llm_service.close()

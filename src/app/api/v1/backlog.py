@@ -11,10 +11,9 @@ Endpoints:
 - POST /backlog/export/{thread_id} - Export to JIRA
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Annotated, Any, Literal
-from uuid import uuid4
 
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,9 +21,10 @@ from ...agents.backlog.config import BacklogAgentConfig
 from ...agents.backlog.nodes.import_node import ImportNode
 from ...agents.backlog.schemas import UserStory
 from ...agents.persistence import SqlAlchemyCheckpointSaver
+from ...api.dependencies import get_optional_user
 from ...core.db.database import async_get_db
-from ...api.dependencies import get_current_user, get_optional_user
 from ...models.user import User
+
 router = APIRouter(prefix="/backlog", tags=["backlog"])
 
 
@@ -187,15 +187,12 @@ async def import_file(
     # Read into memory or pass file object
     # unstructured partition expects file-like or filename
     text = node.parse_file(file.file, file.filename)
-    
+
     # Heuristic cleanup: limit to first 5000 chars if too long
     if len(text) > 10000:
         text = text[:10000] + "\n\n... (truncated)"
-        
-    return DecomposeRequest(
-        epic_description=text,
-        output_format="json"
-    )
+
+    return DecomposeRequest(epic_description=text, output_format="json")
 
 
 @router.post("/decompose", response_model=DecomposeResponse)
@@ -222,7 +219,7 @@ async def decompose_epic(
     try:
         agent = get_agent(db, config=config)
         user_id = str(current_user.id) if current_user else "anonymous"
-        
+
         result = await agent.decompose(
             epic_description=request.epic_description,
             context=request.context,
@@ -247,7 +244,7 @@ async def decompose_epic(
         recommendations = full_response.get("recommendations", []) if full_response else []
 
         from ...core.config import settings
-        
+
         return DecomposeResponse(
             thread_id=result["thread_id"],
             story_count=result.get("story_count", 0),
@@ -263,6 +260,7 @@ async def decompose_epic(
         )
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Debug Error Decompose: {str(e)}")
 
@@ -283,11 +281,11 @@ async def refine_decomposition(
     2. **Hydration (Door B)**: Send a list of `stories` in the first message to initialize refinement.
     """
     config = BacklogAgentConfig(USE_MOCKS=False)
-    
+
     try:
         agent = get_agent(db, config=config)
         user_id = str(current_user.id) if current_user else "anonymous"
-        
+
         result = await agent.chat(
             thread_id=thread_id,
             message=request.message,
@@ -295,7 +293,7 @@ async def refine_decomposition(
             initial_stories=request.stories,
             project_key=project_key,
             parent_epic_id=request.parent_epic_id,
-            user_id=user_id, # Inject user_id
+            user_id=user_id,  # Inject user_id
         )
 
         if result.get("error"):
@@ -319,6 +317,7 @@ async def refine_decomposition(
         )
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Debug Error Chat: {str(e)}")
 
@@ -338,7 +337,7 @@ async def get_stories(
     """
     try:
         agent = get_agent(db)
-        
+
         if checkpoint_id:
             result = await agent.get_stories_at_version(thread_id, checkpoint_id)
         else:
@@ -359,10 +358,10 @@ async def get_stories(
         if hasattr(agent.checkpointer, "db"):
             try:
                 from ...agents.conversations import ConversationService
-                
+
                 conversation_service = ConversationService(agent.checkpointer.db)
                 db_messages = await conversation_service.get_messages(thread_id, limit=50)
-                
+
                 # Convert DB messages to dicts
                 messages = [
                     {
@@ -379,7 +378,7 @@ async def get_stories(
                 # Log error but fallback to simple state
                 print(f"Error fetching DB messages: {e}")
                 messages = []
-        
+
         # Fallback to state messages if DB is empty (e.g. non-persistent mode)
         if not messages and result.get("messages"):
             messages = result.get("messages", [])
@@ -396,6 +395,7 @@ async def get_stories(
         }
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Debug Error: {str(e)}")
 
@@ -413,13 +413,13 @@ async def get_thread_history(
     """
     agent = get_agent(db)
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     versions = []
     async for state in agent.graph.aget_state_history(config):
         # Only include terminal states (completed turns) to avoid version clutter
         if state.next or not state.values or "stories" not in state.values:
             continue
-            
+
         current_result = state.values.get("current_result")
         summary = "Initial Decomposition"
         if isinstance(current_result, dict):
@@ -427,19 +427,18 @@ async def get_thread_history(
         elif hasattr(current_result, "summary"):
             summary = current_result.summary
 
-        versions.append({
-            "checkpoint_id": state.config.get("configurable", {}).get("checkpoint_id"),
-            "timestamp": state.created_at if hasattr(state, "created_at") else None,
-            "summary": summary[:100] + ("..." if len(summary) > 100 else ""),
-            "story_count": len(state.values.get("stories", [])),
-            # Metadata to help frontend identify the trigger
-            "is_refinement": not state.values.get("is_first_message", True)
-        })
+        versions.append(
+            {
+                "checkpoint_id": state.config.get("configurable", {}).get("checkpoint_id"),
+                "timestamp": state.created_at if hasattr(state, "created_at") else None,
+                "summary": summary[:100] + ("..." if len(summary) > 100 else ""),
+                "story_count": len(state.values.get("stories", [])),
+                # Metadata to help frontend identify the trigger
+                "is_refinement": not state.values.get("is_first_message", True),
+            }
+        )
 
-    return {
-        "thread_id": thread_id,
-        "versions": versions
-    }
+    return {"thread_id": thread_id, "versions": versions}
 
 
 @router.post("/refine", response_model=DecomposeResponse)

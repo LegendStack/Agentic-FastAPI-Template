@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class EncryptedRedisSemanticCache(RedisSemanticCache):
     """
     Subclass of RedisSemanticCache that extracts the core user prompt for embedding.
-    This prevents 'System Prompt Drowning' where large system prompts overwhelm 
+    This prevents 'System Prompt Drowning' where large system prompts overwhelm
     the similarity calculation for small user prompts.
     """
 
@@ -42,6 +42,7 @@ class EncryptedRedisSemanticCache(RedisSemanticCache):
         if prompt.strip().startswith("[") and prompt.strip().endswith("]"):
             try:
                 import json
+
                 msgs = json.loads(prompt)
                 user_msgs = [m.get("content", "") for m in msgs if m.get("role") == "user"]
                 if user_msgs:
@@ -56,7 +57,7 @@ class EncryptedRedisSemanticCache(RedisSemanticCache):
         """Lookup based on meaningful content only."""
         meaningful_prompt = self._extract_meaningful_content(prompt)
         logger.debug(f"Cache Lookup: Original Length={len(prompt)}, Meaningful Length={len(meaningful_prompt)}")
-        
+
         # We call the parent lookup but we want it to use our meaningful prompt for embedding
         return super().lookup(meaningful_prompt, llm_string)
 
@@ -64,5 +65,5 @@ class EncryptedRedisSemanticCache(RedisSemanticCache):
         """Store using meaningful content for the embedding."""
         meaningful_prompt = self._extract_meaningful_content(prompt)
         logger.debug(f"Cache Update: Original Length={len(prompt)}, Meaningful Length={len(meaningful_prompt)}")
-        
+
         super().update(meaningful_prompt, llm_string, return_val)

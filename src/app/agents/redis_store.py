@@ -1,10 +1,13 @@
-import logging
 import json
+import logging
 from typing import Any
+
 import numpy as np
+
 from .base import BaseVectorStore
 
 logger = logging.getLogger(__name__)
+
 
 class RedisVectorStore(BaseVectorStore):
     """
@@ -12,12 +15,7 @@ class RedisVectorStore(BaseVectorStore):
     Supports Vector Similarity Search (HNSW/FLAT) and metadata filtering.
     """
 
-    def __init__(
-        self, 
-        redis_url: str, 
-        index_name: str = "agent-index", 
-        embedding_dimension: int = 1536
-    ):
+    def __init__(self, redis_url: str, index_name: str = "agent-index", embedding_dimension: int = 1536):
         self.redis_url = redis_url
         self.index_name = index_name
         self.embedding_dimension = embedding_dimension
@@ -29,12 +27,10 @@ class RedisVectorStore(BaseVectorStore):
         if self._client is None:
             try:
                 import redis.asyncio as redis
+
                 self._client = redis.from_url(self.redis_url)
             except ImportError:
-                raise ImportError(
-                    "redis is required for Redis Vector Store. "
-                    "Install with: pip install redis"
-                )
+                raise ImportError("redis is required for Redis Vector Store. Install with: pip install redis")
         return self._client
 
     async def create_index_if_not_exists(self):
@@ -52,13 +48,13 @@ class RedisVectorStore(BaseVectorStore):
             logger.info(f"RedisVectorStore: Index '{self.index_name}' already exists.")
         except Exception:
             logger.info(f"RedisVectorStore: Creating index '{self.index_name}'...")
-            
+
             # Define schema
             try:
-                from redis.commands.search.field import TextField, VectorField, TagField
+                from redis.commands.search.field import TagField, TextField, VectorField
             except ImportError:
                 # Fallback for older versions or specific environments
-                from redis.commands.search.fields import TextField, VectorField, TagField
+                from redis.commands.search.fields import TagField, TextField, VectorField
 
             try:
                 from redis.commands.search.index_definition import IndexDefinition, IndexType
@@ -71,7 +67,7 @@ class RedisVectorStore(BaseVectorStore):
                 TextField("content"),
                 TagField("tenantId"),
                 TagField("sourceId"),
-                TextField("metadata"), # Searchable metadata as JSON string
+                TextField("metadata"),  # Searchable metadata as JSON string
                 VectorField(
                     "contentVector",
                     "HNSW",
@@ -99,16 +95,16 @@ class RedisVectorStore(BaseVectorStore):
         """
         await self.create_index_if_not_exists()
         client = await self._get_client()
-        
+
         generated_ids = []
         pipeline = client.pipeline()
 
         for i, doc in enumerate(documents):
             doc_id = ids[i] if ids else f"doc_{i}_{hash(doc['content'])}"
             generated_ids.append(doc_id)
-            
+
             redis_key = f"doc:{self.index_name}:{doc_id}"
-            
+
             # Prepare metadata
             metadata = doc.get("metadata", {})
             metadata_str = json.dumps(metadata)
@@ -120,7 +116,7 @@ class RedisVectorStore(BaseVectorStore):
                 "sourceId": doc.get("source_id", ""),
                 "metadata": metadata_str,
             }
-            
+
             pipeline.hset(redis_key, mapping=mapping)
 
         await pipeline.execute()
@@ -128,11 +124,11 @@ class RedisVectorStore(BaseVectorStore):
         return generated_ids
 
     async def similarity_search(
-        self, 
-        query_vector: list[float], 
-        k: int = 4, 
+        self,
+        query_vector: list[float],
+        k: int = 4,
         filters: dict[str, Any] | None = None,
-        search_text: str | None = None
+        search_text: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Perform KNN similarity search with optional filtering.
@@ -143,7 +139,7 @@ class RedisVectorStore(BaseVectorStore):
         # Build query string
         # Initial query matches everything or specific text
         base_query = search_text if search_text else "*"
-        
+
         # Apply filters via TagFields
         filter_parts = []
         if filters:
@@ -151,7 +147,7 @@ class RedisVectorStore(BaseVectorStore):
                 filter_parts.append(f"@tenantId:{{{filters['tenant_id']}}}")
             if "source_id" in filters:
                 filter_parts.append(f"@sourceId:{{{filters['source_id']}}}")
-        
+
         if filter_parts:
             base_query = f"({' '.join(filter_parts)}) {base_query}"
 
@@ -159,7 +155,7 @@ class RedisVectorStore(BaseVectorStore):
 
         # KNN Query: [base_query]=>[KNN $k @vector_field $query_vector AS score]
         query_str = f"({base_query})=>[KNN {k} @contentVector $vec_param AS score]"
-        
+
         query = (
             Query(query_str)
             .sort_by("score")
@@ -168,9 +164,7 @@ class RedisVectorStore(BaseVectorStore):
             .dialect(2)
         )
 
-        query_params = {
-            "vec_param": np.array(query_vector, dtype=np.float32).tobytes()
-        }
+        query_params = {"vec_param": np.array(query_vector, dtype=np.float32).tobytes()}
 
         results = await client.ft(self.index_name).search(query, query_params=query_params)
 
@@ -184,13 +178,15 @@ class RedisVectorStore(BaseVectorStore):
                 metadata = {"raw": metadata_str}
 
             # Map score (Redis returns distance, so we might need to normalize or label)
-            docs.append({
-                "id": res.id.split(":")[-1], # Strip prefix
-                "content": res.content,
-                "metadata": metadata,
-                "source_id": getattr(res, "sourceId", None),
-                "score": float(res.score),
-            })
+            docs.append(
+                {
+                    "id": res.id.split(":")[-1],  # Strip prefix
+                    "content": res.content,
+                    "metadata": metadata,
+                    "source_id": getattr(res, "sourceId", None),
+                    "score": float(res.score),
+                }
+            )
 
         return docs
 

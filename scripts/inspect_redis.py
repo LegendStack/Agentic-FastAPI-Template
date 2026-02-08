@@ -1,5 +1,6 @@
-import redis
 import os
+
+import redis
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,11 +16,11 @@ keys = r.keys("*")
 print(f"Found {len(keys)} keys")
 
 for key in keys:
-    key_str = key.decode('utf-8')
-    # RedisSemanticCache uses a specific format. 
+    key_str = key.decode("utf-8")
+    # RedisSemanticCache uses a specific format.
     # Usually it's a hash or a list.
-    type_info = r.type(key).decode('utf-8')
+    type_info = r.type(key).decode("utf-8")
     print(f"Key: {key_str} | Type: {type_info}")
-    
+
     # If it's the vector index, we can't easily read it with standard redis-py
     # But often there are metadata keys.
