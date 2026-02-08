@@ -142,12 +142,6 @@ const Dashboard = () => {
             </div>
             {!isSidebarMinimized && <span className="font-bold text-xl text-text-primary tracking-tighter">BACKLOG.AI</span>}
           </div>
-          <button
-            onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
-            className="p-1.5 hover:bg-bg-tertiary rounded-lg text-text-tertiary transition-all"
-          >
-            <ChevronLeft className={`w-4 h-4 transition-transform duration-300 ${isSidebarMinimized ? 'rotate-180' : ''}`} />
-          </button>
         </div>
 
         <div className={`px-4 mt-4 ${isSidebarMinimized ? 'px-2' : ''}`}>
@@ -179,38 +173,50 @@ const Dashboard = () => {
           />
         </div>
 
-        <div className={`p-4 border-t border-border-primary flex flex-col gap-4 bg-bg-secondary/30`}>
-          <div className={`flex items-center justify-between gap-3 overflow-hidden min-w-0 ${isSidebarMinimized ? 'flex-col items-center' : ''}`}>
-            <div className={`flex items-center gap-3 min-w-0 ${isSidebarMinimized ? 'flex-col items-center' : ''}`}>
-              <div className="w-8 h-8 rounded-full bg-bg-tertiary flex items-center justify-center text-xs text-text-primary shrink-0 border border-border-primary/50">
-                <User className="w-4 h-4" />
+        <div className={`p-2 border-t border-border-primary bg-bg-secondary/30 flex flex-col gap-2`}>
+          <div className={`flex items-center justify-between gap-2 overflow-hidden min-w-0 ${isSidebarMinimized ? 'flex-col items-center p-1' : 'px-2 py-1'}`}>
+            <div className={`flex items-center gap-2 min-w-0 ${isSidebarMinimized ? 'flex-col' : ''}`}>
+              <div className="w-6 h-6 rounded-full bg-bg-tertiary flex items-center justify-center text-xs text-text-primary shrink-0 border border-border-primary/50">
+                <User className="w-3 h-3" />
               </div>
               {!isSidebarMinimized && (
-                <span className="text-sm font-bold text-text-primary truncate">
+                <span className="text-[11px] font-bold text-text-primary truncate">
                   {accounts[0]?.name ? accounts[0].name.split(' ')[0] : (accounts[0]?.username?.split('@')[0] || 'User')}
                 </span>
               )}
             </div>
-            {!isSidebarMinimized && (
-              <button
-                onClick={() => instance.logoutRedirect()}
-                className="p-2 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-red-400 transition-all shrink-0"
-                title="Sign Out"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            )}
-          </div>
 
-          <div className={`flex items-center gap-2 ${isSidebarMinimized ? 'flex-col' : 'justify-between'}`}>
-            <button
-              onClick={() => setIsValueDashboardOpen(true)}
-              className={`p-2 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-emerald-400 transition-all ${isSidebarMinimized ? 'w-full flex justify-center' : ''}`}
-              title="ROI Metrics"
-            >
-              <BarChart3 className="w-5 h-5" />
-            </button>
-            <ThemeToggle />
+            <div className={`flex items-center gap-1 ${isSidebarMinimized ? 'flex-col w-full' : ''}`}>
+              {!isSidebarMinimized && (
+                <button
+                  onClick={() => instance.logoutRedirect()}
+                  className="p-1.5 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-red-400 transition-all shrink-0"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsValueDashboardOpen(true)}
+                className={`p-1.5 hover:bg-bg-tertiary rounded-lg text-text-secondary hover:text-emerald-400 transition-all ${isSidebarMinimized ? 'w-full flex justify-center' : ''}`}
+                title="ROI Metrics"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+              </button>
+
+              <div className={`flex items-center ${!isSidebarMinimized ? "-translate-y-[1.5px]" : ""}`}>
+                <ThemeToggle size="sm" />
+              </div>
+
+              <button
+                onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
+                className="p-1.5 hover:bg-bg-tertiary rounded-lg text-text-tertiary transition-all"
+                title={isSidebarMinimized ? "Expand Sidebar" : "Minimize Sidebar"}
+              >
+                <ChevronLeft className={`w-3.5 h-3.5 transition-transform duration-300 ${isSidebarMinimized ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
