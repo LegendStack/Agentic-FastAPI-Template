@@ -53,6 +53,7 @@ class FormatNode:
             messages = messages + [{"role": "assistant", "content": help_response}]
             return {
                 "formatted_output": help_response,
+                "summary": "Backlog Assistant capabilities and help guide",
                 "messages": messages,
                 "error": None,
             }
@@ -66,6 +67,7 @@ class FormatNode:
             messages = messages + [{"role": "assistant", "content": report_text}]
             return {
                 "formatted_output": report_text,
+                "summary": "Backlog grooming and quality analysis report",
                 "messages": messages,
                 "error": None,
             }

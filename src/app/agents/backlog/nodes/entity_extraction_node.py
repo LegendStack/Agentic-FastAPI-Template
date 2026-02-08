@@ -298,14 +298,22 @@ class EntityExtractionNode:
                     break
 
         if not user_input:
-            return {"extracted_entities": [], "enriched_context": ""}
+            return {
+                "extracted_entities": [],
+                "enriched_context": "",
+                "stories": state.get("stories", []),  # Preserve stories
+            }
 
         # Extract entities
         entities = self.extractor.extract(user_input)
 
         if not entities:
             logger.info("EntityExtractionNode: No entities found in input")
-            return {"extracted_entities": [], "enriched_context": ""}
+            return {
+                "extracted_entities": [],
+                "enriched_context": "",
+                "stories": state.get("stories", []),  # Preserve stories
+            }
 
         # Hydrate entities with Jira context
         entities = await self.hydrator.hydrate_entities(
@@ -339,9 +347,14 @@ class EntityExtractionNode:
             f"auto_project={auto_bound_project}, auto_epic={auto_bound_epic}"
         )
 
+        # Preserve stories through the node chain
+        existing_stories = state.get("stories", [])
+        logger.info(f"EntityExtractionNode: Preserving {len(existing_stories)} stories")
+
         return {
             "extracted_entities": [e.to_dict() for e in entities],
             "enriched_context": enriched_context,
             "auto_bound_project": auto_bound_project,
             "auto_bound_epic": auto_bound_epic,
+            "stories": existing_stories,  # Explicitly preserve stories
         }

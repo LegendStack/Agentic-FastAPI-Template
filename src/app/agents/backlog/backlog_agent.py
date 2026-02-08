@@ -333,7 +333,27 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
         if context:
             full_input += f"\n\nContext: {context}"
 
-        # Check for duplicates if mocks disabled
+        # Quick intent pre-check: Handle obvious non-decompose intents BEFORE duplicate detection
+        # This prevents help queries from being matched to cached decompositions
+        lower_input = epic_description.lower().strip()
+        help_patterns = [
+            "help", "how can you", "what can you", "what do you",
+            "who are you", "capabilities", "introduce", "hello", "hi",
+        ]
+        
+        # If this looks like a help request, go directly to chat (which will route to help)
+        if any(pattern in lower_input for pattern in help_patterns) and len(epic_description) < 100:
+            logger.info("BacklogAgent.decompose: Detected help intent, bypassing duplicate check")
+            return await self.chat(
+                thread_id=thread_id,
+                message=full_input,
+                output_format=output_format,
+                project_key=project_key,
+                parent_epic_id=parent_epic_id,
+                user_id=user_id,
+            )
+
+        # Check for duplicates if mocks disabled (only for actual decomposition requests)
         if not self.config.USE_MOCKS:
             dup_thread_id = await self._check_duplicate_epic(full_input)
             if dup_thread_id:
@@ -575,7 +595,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
             "response": current_result.model_dump() if current_result else None,
             "formatted_output": final_state.get("formatted_output"),
             "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in final_state.get("stories", [])],
-            "summary": current_result.summary if current_result else None,
+            "summary": final_state.get("summary") or (current_result.summary if current_result else None),
             "story_count": len(final_state.get("stories", [])),
             "output_format": final_state.get("output_format"),
             "is_locked": final_state.get("is_locked", False),

@@ -119,6 +119,7 @@ class InputNode:
                 "is_first_message": False,
                 "manual_edits_detected": False,  # Edits not relevant for pure save but good to initialize
                 "edit_context": None,
+                "stories": existing_stories,  # Preserve stories
                 "error": None,
             }
 
@@ -157,6 +158,7 @@ class InputNode:
                 "is_first_message": False,
                 "manual_edits_detected": manual_edits_detected,
                 "edit_context": edit_context,
+                "stories": existing_stories,  # Preserve stories through refinement
                 "error": None,
             }
 

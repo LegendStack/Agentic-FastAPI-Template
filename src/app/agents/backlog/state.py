@@ -54,6 +54,7 @@ class BacklogAgentState(BaseAgentState):
     output_format: str
     story_template: str
     formatted_output: str | None
+    summary: str | None  # Primary summary for the current turn
 
     # Export (optional)
     export_result: dict[str, Any] | None

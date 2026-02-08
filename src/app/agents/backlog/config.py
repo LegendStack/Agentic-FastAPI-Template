@@ -118,17 +118,21 @@ class BacklogAgentConfig:
     def get_llm(self):
         """
         Get the LLM instance based on mock configuration.
-        
+
         Returns:
             A mock LLM if USE_MOCKS is True, otherwise the configured LLM.
         """
         if self.USE_MOCKS:
             from ..demo.mocks.mock_llm import MockLLM
+
             return MockLLM()
         else:
             from langchain_openai import AzureChatOpenAI
+
             return AzureChatOpenAI(
-                azure_deployment=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
-                api_version=settings.AZURE_OPENAI_API_VERSION,
+                azure_deployment=settings.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
+                openai_api_version=settings.AZURE_OPENAI_API_VERSION,
+                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                api_key=settings.AZURE_OPENAI_API_KEY.get_secret_value(),
                 temperature=0.3,
             )

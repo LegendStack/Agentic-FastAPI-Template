@@ -47,16 +47,19 @@ class IntentNode:
         Returns:
             Updated state with detected_intent field.
         """
-        # Get the user's message
-        user_message = state.get("epic_input") or ""
+        # Get the latest user message from history first (most reliable for current turn)
+        messages = state.get("messages", [])
+        user_message = ""
+        
+        if messages:
+            for msg in reversed(messages):
+                if msg.get("role") in ["user", "human"]:
+                    user_message = msg.get("content", "")
+                    break
+        
+        # Fallback to epic_input if no messages found
         if not user_message:
-            messages = state.get("messages", [])
-            if messages:
-                # Get the last human message
-                for msg in reversed(messages):
-                    if msg.get("role") == "human":
-                        user_message = msg.get("content", "")
-                        break
+            user_message = state.get("epic_input") or ""
         
         if not user_message:
             logger.warning("IntentNode: No user message found, defaulting to HELP")
@@ -65,27 +68,43 @@ class IntentNode:
         # Check for existing stories - if they exist and user isn't providing new content,
         # they're likely refining
         has_stories = bool(state.get("stories"))
+        stories_count = len(state.get("stories", []))
         is_first = state.get("is_first_message", True)
+        logger.info(f"IntentNode: stories_count={stories_count}, has_stories={has_stories}, is_first={is_first}")
         
         # Quick heuristics for common cases (avoid LLM call when obvious)
         lower_message = user_message.lower().strip()
         
-        # Help indicators
+        logger.info(f"IntentNode: Checking message='{user_message[:50]}...' len={len(user_message)} is_first={is_first} has_stories={has_stories}")
+        
+        # Help indicators - CHECK FIRST before any other logic
         help_patterns = [
             "help", "how can you", "what can you", "what do you",
             "who are you", "capabilities", "introduce", "hello", "hi",
             "how does", "what is", "explain"
         ]
-        if any(pattern in lower_message for pattern in help_patterns) and len(user_message) < 100:
-            logger.info("IntentNode: Quick match for HELP intent")
-            return {"detected_intent": UserIntent.HELP.value}
+        
+        # Check help patterns with clear logging
+        for pattern in help_patterns:
+            if pattern in lower_message:
+                logger.info(f"IntentNode: Found help pattern '{pattern}' in message, len={len(user_message)}")
+                if len(user_message) < 100:
+                    logger.info("IntentNode: Quick match for HELP intent - returning help")
+                    return {"detected_intent": UserIntent.HELP.value}
+                else:
+                    logger.info(f"IntentNode: Message too long ({len(user_message)} >= 100), skipping help")
+                break
         
         # Groom indicators
         groom_patterns = [
             "duplicate", "duplicates", "dependency", "dependencies",
-            "analyze backlog", "quality", "missing", "gaps", "overlap"
+            "analyze", "quality", "missing", "gaps", "overlap",
+            "groom", "grooming", "review backlog", "check backlog",
+            "audit", "assess", "evaluate"
         ]
-        if any(pattern in lower_message for pattern in groom_patterns) and has_stories:
+        groom_match = any(pattern in lower_message for pattern in groom_patterns)
+        logger.info(f"IntentNode: Groom check - has_stories={has_stories}, groom_match={groom_match}")
+        if groom_match and has_stories:
             logger.info("IntentNode: Quick match for GROOM intent")
             return {"detected_intent": UserIntent.GROOM.value}
         
