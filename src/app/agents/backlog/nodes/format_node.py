@@ -45,6 +45,31 @@ class FormatNode:
         """
         logger.info("FormatNode: Formatting output")
 
+        # Handle help response (from HelpNode)
+        help_response = state.get("help_response")
+        if help_response:
+            logger.info("FormatNode: Formatting help response")
+            messages = state.get("messages", [])
+            messages = messages + [{"role": "assistant", "content": help_response}]
+            return {
+                "formatted_output": help_response,
+                "messages": messages,
+                "error": None,
+            }
+
+        # Handle grooming report (from GroomNode)
+        grooming_report = state.get("grooming_report")
+        if grooming_report:
+            logger.info("FormatNode: Formatting grooming report")
+            report_text = self._format_grooming_report(grooming_report)
+            messages = state.get("messages", [])
+            messages = messages + [{"role": "assistant", "content": report_text}]
+            return {
+                "formatted_output": report_text,
+                "messages": messages,
+                "error": None,
+            }
+
         current_result = state.get("current_result")
         if not current_result:
             return {
@@ -128,6 +153,89 @@ class FormatNode:
     def _format_markdown(self, result: DecompositionResult) -> str:
         """Format as markdown document."""
         return result.to_markdown()
+
+    def _format_grooming_report(self, report: dict) -> str:
+        """Format grooming report as markdown."""
+        if report.get("error"):
+            return f"## ⚠️ Grooming Error\n\n{report['error']}"
+        
+        output = "## 📊 Backlog Grooming Report\n\n"
+        output += f"**Summary**: {report.get('summary', 'N/A')}\n\n"
+        
+        total = report.get("total_stories", 0)
+        if total:
+            output += f"📋 **Total Stories Analyzed**: {total}\n\n"
+        
+        duplicates = report.get("duplicates", [])
+        if duplicates:
+            output += "### 🔁 Potential Duplicates\n"
+            for dup in duplicates:
+                if isinstance(dup, dict):
+                    s1, s2 = dup.get("story_1", "?"), dup.get("story_2", "?")
+                    sim = dup.get("similarity", 0)
+                    reason = dup.get("reason", "")
+                    output += f"- `{s1}` ↔ `{s2}` ({int(sim * 100)}%): {reason}\n"
+                else:
+                    output += f"- {dup}\n"
+            output += "\n"
+        else:
+            output += "✅ **No duplicates detected**\n\n"
+        
+        dependencies = report.get("dependencies", [])
+        if dependencies:
+            output += "### 🔗 Dependencies\n"
+            for dep in dependencies:
+                if isinstance(dep, dict):
+                    story, depends, dep_type = dep.get("story", "?"), dep.get("depends_on", "?"), dep.get("type", "requires")
+                    reason = dep.get("reason", "")
+                    output += f"- `{story}` → `{depends}` ({dep_type}): {reason}\n"
+                else:
+                    output += f"- {dep}\n"
+            output += "\n"
+        
+        quality_issues = report.get("quality_issues", [])
+        if quality_issues:
+            # Group by severity
+            high = [q for q in quality_issues if q.get("severity") == "high"]
+            medium = [q for q in quality_issues if q.get("severity") == "medium"]
+            low = [q for q in quality_issues if q.get("severity") == "low"]
+            
+            output += "### ⚠️ Quality Issues\n"
+            
+            if high:
+                output += "\n**🔴 High Priority:**\n"
+                for issue in high:
+                    output += f"- `{issue.get('story', '?')}`: {issue.get('issue', '?')} - {issue.get('suggestion', '')}\n"
+            
+            if medium:
+                output += "\n**🟡 Medium Priority:**\n"
+                for issue in medium:
+                    output += f"- `{issue.get('story', '?')}`: {issue.get('issue', '?')} - {issue.get('suggestion', '')}\n"
+            
+            if low:
+                output += "\n**🟢 Low Priority:**\n"
+                for issue in low:
+                    output += f"- `{issue.get('story', '?')}`: {issue.get('issue', '?')}\n"
+            
+            output += "\n"
+        else:
+            output += "✅ **All stories meet quality standards**\n\n"
+        
+        priority_suggestions = report.get("priority_suggestions", [])
+        if priority_suggestions:
+            output += "### 🎯 Priority Suggestions\n"
+            for sug in priority_suggestions[:5]:  # Limit to top 5
+                if isinstance(sug, dict):
+                    story = sug.get("story", "?")
+                    current = sug.get("current", "N/A")
+                    suggested = sug.get("suggested", "?")
+                    reason = sug.get("reason", "")
+                    output += f"- `{story}`: {current} → **{suggested}** ({reason})\n"
+            if len(priority_suggestions) > 5:
+                output += f"_...and {len(priority_suggestions) - 5} more suggestions_\n"
+            output += "\n"
+        
+        return output
 
     def _format_jira(self, result: DecompositionResult) -> str:
         """

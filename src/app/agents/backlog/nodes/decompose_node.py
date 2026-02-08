@@ -153,10 +153,16 @@ class DecomposeNode:
                 # 2. Retrieve similar stories for context (Phase 13)
                 reference_stories = await self._retrieve_reference_stories(parsed_epic)
 
-                # 2. LLM Decomposition with context
+                # 3. Get enriched context from entity extraction (Phase 5)
+                enriched_context = state.get("enriched_context", "")
+
+                # 4. LLM Decomposition with full context
                 story_template = state.get("story_template", self.config.STORY_TEMPLATE)
                 result, usage = await self._llm_decompose(
-                    parsed_epic, reference_stories=reference_stories, story_template=story_template
+                    parsed_epic,
+                    reference_stories=reference_stories,
+                    story_template=story_template,
+                    enriched_context=enriched_context,
                 )
 
             if not self.config.USE_MOCKS:
@@ -248,7 +254,11 @@ class DecomposeNode:
         return MockDecomposeResult.generate(epic, self.config)
 
     async def _llm_decompose(
-        self, epic: Epic, reference_stories: list[UserStory] | None = None, story_template: str = "standard"
+        self,
+        epic: Epic,
+        reference_stories: list[UserStory] | None = None,
+        story_template: str = "standard",
+        enriched_context: str = "",
     ) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to decompose the epic."""
         if not self.llm_service:
@@ -256,6 +266,12 @@ class DecomposeNode:
 
         # Build context from reference stories
         context = epic.context or ""
+        
+        # Add enriched context from Jira entity extraction (Phase 5)
+        if enriched_context:
+            context += "\n\n" + enriched_context
+            logger.info("DecomposeNode: Enriched context added (%d chars)", len(enriched_context))
+        
         if reference_stories:
             context += "\n\n### Reference Examples from Past Stories:\n"
             for s in reference_stories:

@@ -71,3 +71,18 @@ class BacklogAgentState(BaseAgentState):
     manual_edits_detected: bool
     edit_context: str | None
     is_locked: bool | None
+
+    # Intent Classification (Phase 1)
+    detected_intent: str | None
+
+    # Help/Q&A (Phase 2)
+    help_response: str | None
+
+    # Grooming (Phase 4)
+    grooming_report: dict | None
+
+    # Entity Extraction (Phase 5)
+    extracted_entities: list | None  # Extracted Jira entities
+    enriched_context: str | None  # Formatted context from Jira
+    auto_bound_project: str | None  # Project key from first entity
+    auto_bound_epic: str | None  # Epic key from entity or parent
