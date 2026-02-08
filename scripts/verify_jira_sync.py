@@ -8,7 +8,7 @@ url_export_base = "http://localhost:8635/api/v1/backlog/export"
 # 1. Decompose first
 print("--- Step 1: Decomposing ---")
 payload_decomp = {
-    "epic_description": "Test Epic for Jira Sync",
+    "epic_description": "Sample Integration Epic",
     "project_key": "KAN"
 }
 resp_decomp = requests.post(url_decompose, json=payload_decomp)

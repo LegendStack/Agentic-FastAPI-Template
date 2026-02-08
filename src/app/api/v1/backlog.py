@@ -11,18 +11,20 @@ Endpoints:
 - POST /backlog/export/{thread_id} - Export to JIRA
 """
 
-import uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Annotated, Any, Literal
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...agents.backlog import BacklogAgentConfig
+from ...agents.backlog.config import BacklogAgentConfig
+from ...agents.backlog.nodes.import_node import ImportNode
 from ...agents.backlog.schemas import UserStory
 from ...agents.persistence import SqlAlchemyCheckpointSaver
 from ...core.db.database import async_get_db
-
+from ...api.dependencies import get_current_user, get_optional_user
+from ...models.user import User
 router = APIRouter(prefix="/backlog", tags=["backlog"])
 
 
@@ -106,6 +108,7 @@ class DecomposeResponse(BaseModel):
     error: str | None = None
     usage: dict[str, Any] | None = None
     jira_base_url: str | None = None
+    is_locked: bool = False
 
 
 class RefineRequest(BaseModel):
@@ -152,6 +155,7 @@ class ExportResponse(BaseModel):
     issues: list[dict] | None = None
     stories: list[UserStory] | None = None
     errors: list[dict] | None = None
+    is_locked: bool = False
     error: str | None = None
 
 
@@ -172,15 +176,36 @@ def get_agent(
 # === API Endpoints ===
 
 
+@router.post("/import", response_model=DecomposeRequest)
+async def import_file(
+    file: UploadFile = File(...),
+) -> DecomposeRequest:
+    """
+    Import a file (PDF, Docx, TXT) and convert to epic description.
+    """
+    node = ImportNode()
+    # Read into memory or pass file object
+    # unstructured partition expects file-like or filename
+    text = node.parse_file(file.file, file.filename)
+    
+    # Heuristic cleanup: limit to first 5000 chars if too long
+    if len(text) > 10000:
+        text = text[:10000] + "\n\n... (truncated)"
+        
+    return DecomposeRequest(
+        epic_description=text,
+        output_format="json"
+    )
+
+
 @router.post("/decompose", response_model=DecomposeResponse)
 async def decompose_epic(
     request: DecomposeRequest,
     project_key: str | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+    current_user: Annotated[User, Depends(get_optional_user)] = None,
 ) -> DecomposeResponse:
     """
-    Decompose an epic into user stories.
-
     Takes a high-level epic description and breaks it down into
     well-structured user stories with acceptance criteria.
 
@@ -196,12 +221,15 @@ async def decompose_epic(
 
     try:
         agent = get_agent(db, config=config)
+        user_id = str(current_user.id) if current_user else "anonymous"
+        
         result = await agent.decompose(
             epic_description=request.epic_description,
             context=request.context,
             output_format=request.output_format,
             project_key=project_key,
             parent_epic_id=request.parent_epic_id,
+            user_id=user_id,
         )
 
         if result.get("error"):
@@ -231,6 +259,7 @@ async def decompose_epic(
             error=result.get("error"),
             usage=result.get("usage"),
             jira_base_url=settings.JIRA_URL,
+            is_locked=result.get("is_locked", False),
         )
     except Exception as e:
         import traceback
@@ -244,6 +273,7 @@ async def refine_decomposition(
     request: ChatRequest,
     project_key: str | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+    current_user: Annotated[User, Depends(get_optional_user)] = None,
 ) -> DecomposeResponse:
     """
     Refine an existing decomposition or start refinement from existing stories.
@@ -256,6 +286,8 @@ async def refine_decomposition(
     
     try:
         agent = get_agent(db, config=config)
+        user_id = str(current_user.id) if current_user else "anonymous"
+        
         result = await agent.chat(
             thread_id=thread_id,
             message=request.message,
@@ -263,6 +295,7 @@ async def refine_decomposition(
             initial_stories=request.stories,
             project_key=project_key,
             parent_epic_id=request.parent_epic_id,
+            user_id=user_id, # Inject user_id
         )
 
         if result.get("error"):
@@ -282,6 +315,7 @@ async def refine_decomposition(
             recommendations=recommendations,
             error=result.get("error"),
             usage=result.get("usage"),
+            is_locked=result.get("is_locked", False),
         )
     except Exception as e:
         import traceback
@@ -357,6 +391,7 @@ async def get_stories(
             "stories": result.get("stories", []),
             "result": result.get("result"),
             "messages": messages,
+            "is_locked": result.get("is_locked", False),
             "metadata": result.get("metadata", {}),
         }
     except Exception as e:
@@ -412,6 +447,7 @@ async def refine_existing_stories(
     request: RefineRequest,
     project_key: str | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+    current_user: Annotated[User, Depends(get_optional_user)] = None,
 ) -> DecomposeResponse:
     """
     Refine existing stories based on user feedback.
@@ -423,6 +459,7 @@ async def refine_existing_stories(
     agent = get_agent(db, config)
 
     thread_id = request.thread_id or str(uuid.uuid4())
+    user_id = str(current_user.id) if current_user else "anonymous"
 
     result = await agent.chat(
         thread_id=thread_id,
@@ -431,6 +468,7 @@ async def refine_existing_stories(
         initial_stories=request.stories,
         project_key=project_key,
         parent_epic_id=request.parent_epic_id,
+        user_id=user_id,
     )
 
     if result.get("error"):
@@ -449,6 +487,7 @@ async def refine_existing_stories(
         recommendations=recommendations,
         error=result.get("error"),
         usage=result.get("usage"),
+        is_locked=result.get("is_locked", False),
     )
 
 
@@ -457,6 +496,7 @@ async def export_to_jira(
     thread_id: str,
     request: ExportRequest | None = None,
     db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+    current_user: Annotated[User, Depends(get_optional_user)] = None,
 ) -> ExportResponse:
     """
     Export the decomposition to JIRA.
@@ -474,8 +514,9 @@ async def export_to_jira(
     )
 
     agent = get_agent(db, config)
+    user_id = str(current_user.id) if current_user else "anonymous"
 
-    result = await agent.save_to_jira(thread_id)
+    result = await agent.save_to_jira(thread_id, user_id=user_id)
 
     if result.get("error") and not result.get("export_result"):
         raise HTTPException(status_code=400, detail=result["error"])
@@ -489,6 +530,7 @@ async def export_to_jira(
         issues=export_result.get("issues"),
         stories=result.get("stories"),
         errors=export_result.get("errors"),
+        is_locked=result.get("is_locked", False),
         error=result.get("error"),
     )
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...agents.azure_openai import LLMService
+from ...agents.azure_openai import LLMService, get_llm_service
 from ...agents.background import enqueue_agent_task, get_task_status
 from ...agents.hitl import hitl_manager
 from ...agents.indexers import DocumentIndexer
@@ -35,11 +35,15 @@ async def index_file(file: UploadFile = File(...), db: Annotated[AsyncSession, D
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        llm_service = LLMService()
+        llm_service = get_llm_service()
         vector_store = VectorStoreFactory.get_store(db)
-        indexer = DocumentIndexer(vector_store, llm_service)
-        result = await indexer.run(file_path=file_path)
-        return result
+        try:
+            indexer = DocumentIndexer(vector_store, llm_service)
+            result = await indexer.run(file_path=file_path)
+            return result
+        finally:
+            if hasattr(vector_store, "close"):
+                await vector_store.close()
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)

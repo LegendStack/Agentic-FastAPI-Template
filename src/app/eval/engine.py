@@ -22,7 +22,7 @@ from ragas.metrics import (
     faithfulness,
 )
 
-from ..agents.azure_openai import LLMService
+from ..agents.azure_openai import LLMService, get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class EvalEngine:
     """
 
     def __init__(self, llm_service: LLMService | None = None):
-        self.llm_service = llm_service or LLMService()
+        self.llm_service = llm_service or get_llm_service()
         self.metrics = [
             faithfulness,
             answer_relevancy,

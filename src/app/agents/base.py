@@ -56,6 +56,15 @@ class BaseVectorStore(ABC):
         """Remove documents by ID."""
         pass
 
+    async def similarity_search_hybrid(
+        self, query: str, query_vector: list[float], k: int = 4, filters: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Perform hybrid search (Vector + Keyword).
+        Default implementation falls back to vector search.
+        """
+        return await self.similarity_search(query_vector, k, filters)
+
 
 class BaseIndexer(ABC):
     """Abstract interface for data source indexers (Jira, Product Docs, etc.)"""

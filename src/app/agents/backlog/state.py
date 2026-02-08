@@ -60,15 +60,16 @@ class BacklogAgentState(BaseAgentState):
     # Export (optional)
     export_result: dict[str, Any] | None
 
-    # Session management
+    # Session    # Metadata
     thread_id: str
     tenant_id: str | None
     project_key: str | None
-    parent_epic_id: str | None # New field for Epic linking
-
-    # Error handling
+    parent_epic_id: str | None
+    user_id: str | None  # Context for audit logging
     error: str | None
+    metadata: dict[str, Any]
 
     # Edit awareness
     manual_edits_detected: bool
     edit_context: str | None
+    is_locked: bool | None

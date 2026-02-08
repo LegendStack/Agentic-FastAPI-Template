@@ -8,7 +8,7 @@ Updates the decomposition based on user's requests.
 import logging
 from typing import Any
 
-from ...azure_openai import LLMService
+from ...azure_openai import LLMService, get_llm_service
 from ...structured_output import StructuredOutputValidator
 from ..config import BacklogAgentConfig
 from ..prompts import get_refine_system_prompt, get_refine_user_prompt
@@ -182,7 +182,7 @@ class RefineNode:
     ) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to refine the decomposition."""
         if not self.llm_service:
-            self.llm_service = LLMService()
+            self.llm_service = get_llm_service()
 
         # Build prompts
         current_json = current_result.model_dump_json(indent=2)

@@ -8,7 +8,8 @@ import {
     Check,
     TrendingUp,
     ShieldAlert,
-    ExternalLink
+    ExternalLink,
+    Lock
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { UserStory } from '../hooks/useBacklog';
@@ -18,10 +19,12 @@ interface StoryCardProps {
     story: UserStory;
     onUpdate: (story: UserStory) => void;
     onDelete: (id: string) => void;
+    isLocked?: boolean;
 }
 
-export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
+export const StoryCard = ({ story, onUpdate, onDelete, isLocked = false }: StoryCardProps) => {
     const [copied, setCopied] = useState(false);
+    const isActuallyLocked = isLocked || !!story.jira_key;
 
     const handleCopy = async () => {
         const text = `**${story.id}: ${story.title}**\n\n${story.description}\n\n**Acceptance Criteria:**\n${story.acceptance_criteria.map(ac => typeof ac === 'string' ? `- ${ac}` : `- ${ac.description}`).join('\n')}`;
@@ -41,12 +44,12 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
         >
 
             <div className="flex items-start gap-3">
-                <div className="mt-1 p-1.5 rounded-md bg-accent-primary/10 text-accent-primary">
-                    <Hash className="w-4 h-4" strokeWidth={2.5} />
+                <div className={`mt-1 p-1.5 rounded-md ${isActuallyLocked ? 'bg-bg-tertiary text-text-tertiary' : 'bg-accent-primary/10 text-accent-primary'}`}>
+                    {isActuallyLocked ? <Lock className="w-4 h-4" strokeWidth={2.5} /> : <Hash className="w-4 h-4" strokeWidth={2.5} />}
                 </div>
                 <div className="flex-1">
                     <div className="flex items-baseline gap-2 mb-1">
-                        <span className="text-xs font-mono text-accent-primary uppercase tracking-tighter whitespace-nowrap shrink-0">{story.id}</span>
+                        {!isActuallyLocked && <span className="text-xs font-mono text-accent-primary uppercase tracking-tighter whitespace-nowrap shrink-0">{story.id}</span>}
                         {story.jira_key && (
                             <a
                                 href={story.jira_url}
@@ -62,7 +65,8 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                         <textarea
                             value={story.title}
                             onChange={(e) => onUpdate({ ...story, title: e.target.value })}
-                            className="w-full bg-transparent border-none text-base font-bold text-text-primary focus:ring-0 p-0 hover:bg-bg-tertiary/20 rounded transition-colors resize-none overflow-hidden h-auto"
+                            readOnly={isActuallyLocked}
+                            className={`w-full bg-transparent border-none text-base font-bold text-text-primary focus:ring-0 p-0 rounded transition-colors resize-none overflow-hidden h-auto ${isActuallyLocked ? 'cursor-default' : 'hover:bg-bg-tertiary/20'}`}
                             rows={1}
                             style={{ height: 'auto', minHeight: '28px' }}
                             onInput={(e) => {
@@ -75,7 +79,8 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                     <textarea
                         value={story.description}
                         onChange={(e) => onUpdate({ ...story, description: e.target.value })}
-                        className="w-full bg-transparent border-none text-text-secondary focus:ring-0 p-0 resize-none hover:bg-bg-tertiary/20 rounded transition-colors min-h-[60px] overflow-hidden"
+                        readOnly={isActuallyLocked}
+                        className={`w-full bg-transparent border-none text-text-secondary focus:ring-0 p-0 resize-none rounded transition-colors min-h-[60px] overflow-hidden ${isActuallyLocked ? 'cursor-default' : 'hover:bg-bg-tertiary/20'}`}
                         rows={3}
                         style={{ height: 'auto', minHeight: '60px' }}
                         onInput={(e) => {
@@ -92,6 +97,19 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                     <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" strokeWidth={2.5} />
                     <div className="text-[11px] text-amber-200/80 italic">
                         {story.duplicate_reason || "Potential overlap with an existing story in the backlog."}
+                    </div>
+                </div>
+            )}
+
+            {/* Phase 4: Critic Quality Warning */}
+            {story.technical_notes && story.technical_notes.some(n => n.includes("Quality Warning")) && (
+                <div className="mb-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3 animate-pulse-slow">
+                    <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" strokeWidth={2.5} />
+                    <div className="flex-1">
+                        <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1">Quality Warning</div>
+                        <div className="text-[11px] text-red-200/80">
+                            {story.technical_notes.find(n => n.includes("Quality Warning"))?.replace("⚠️ Quality Warning", "").trim()}
+                        </div>
                     </div>
                 </div>
             )}
@@ -185,15 +203,55 @@ export const StoryCard = ({ story, onUpdate, onDelete }: StoryCardProps) => {
                     >
                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
-                    <button
-                        onClick={() => onDelete(story.id)}
-                        className="p-2 rounded-lg hover:bg-bg-tertiary text-text-tertiary hover:text-red-400 transition-colors"
-                        title="Delete story"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!isActuallyLocked && (
+                        <button
+                            onClick={() => onDelete(story.id)}
+                            className="p-2 rounded-lg hover:bg-bg-tertiary text-text-tertiary hover:text-red-400 transition-colors"
+                            title="Delete story"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             </div>
+
+            {/* Test Scenarios - Phase 4 */}
+            {story.test_scenarios && story.test_scenarios.length > 0 && (
+                <div className="mt-2 text-xs">
+                    <details className="group/details">
+                        <summary className="cursor-pointer list-none appearance-none flex items-center gap-2 text-text-secondary hover:text-accent-primary transition-colors font-semibold select-none">
+                            <div className="p-1 rounded bg-bg-tertiary group-hover/details:bg-accent-primary/10 transition-colors">
+                                <ExternalLink className="w-3 h-3 group-open/details:rotate-90 transition-transform" />
+                            </div>
+                            <span>QA Scenarios ({story.test_scenarios.length})</span>
+                        </summary>
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="mt-3 pl-2 space-y-3 border-l-2 border-border-primary/50 ml-1.5"
+                        >
+                            {story.test_scenarios.map((scenario, idx) => (
+                                <div key={idx} className="bg-bg-tertiary/20 p-3 rounded-lg border border-border-primary/30">
+                                    <div className="flex gap-2 mb-1">
+                                        <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                                        <h5 className="font-mono text-[10px] text-purple-300 opacity-80 uppercase tracking-widest">Scenario {idx + 1}</h5>
+                                    </div>
+                                    <div className="mt-2 group/scenario relative">
+                                        <pre className="bg-bg-primary/40 border border-border-primary/30 p-4 rounded-xl overflow-x-auto shadow-inner">
+                                            <code
+                                                className="language-gherkin text-[11px] font-mono tracking-tight text-purple-300 block leading-relaxed"
+                                                style={{ textShadow: '0 0 10px rgba(168, 85, 247, 0.2)' }}
+                                            >
+                                                {scenario.replace(/```(gherkin)?/gi, '').replace(/```/g, '').trim()}
+                                            </code>
+                                        </pre>
+                                    </div>
+                                </div>
+                            ))}
+                        </motion.div>
+                    </details>
+                </div>
+            )}
         </motion.div>
     );
 };

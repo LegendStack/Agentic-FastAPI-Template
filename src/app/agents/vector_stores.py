@@ -71,6 +71,66 @@ class PgVectorStore(BaseVectorStore):
         await self.db.execute(stmt)
         await self.db.commit()
 
+    async def similarity_search_hybrid(
+        self, query: str, query_vector: list[float], k: int = 4, filters: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Combine Vector Search with PostgreSQL Full Text Search.
+        """
+        # 1. Get Vector Results (Top K)
+        vector_docs = await self.similarity_search(query_vector, k=k, filters=filters)
+        
+        # 2. Get Keyword Results (Top K) via TSVector
+        # Using simple 'english' configuration.
+        ts_query = sa.select(DocumentSection).where(
+            sa.func.to_tsvector("english", DocumentSection.content).match(query)
+        ).limit(k)
+        
+        if filters:
+            for key, value in filters.items():
+                if hasattr(DocumentSection, key):
+                    ts_query = ts_query.where(getattr(DocumentSection, key) == value)
+                    
+        result = await self.db.execute(ts_query)
+        keyword_secs = result.scalars().all()
+        
+        keyword_docs = [
+            {
+                "id": s.id,
+                "content": TenantEncryption.decrypt(s.content, s.tenant_id)
+                if s.metadata_json.get("encrypted")
+                else s.content,
+                "metadata": s.metadata_json,
+                "source_id": s.source_id,
+                "tenant_id": s.tenant_id,
+                 "score": 1.0 # Placeholder score
+            }
+            for s in keyword_secs
+        ]
+
+        # 3. Merge Strategies (Simple RRF-like or Union)
+        # Map ID -> Doc
+        merged = {}
+        
+        # Add Vector Docs (weight 0.7)
+        for i, doc in enumerate(vector_docs):
+            doc["score"] = 0.7 * (1 - (i / k)) # Simple rank decay
+            merged[doc["id"]] = doc
+            
+        # Add Keyword Docs (weight 0.3)
+        for i, doc in enumerate(keyword_docs):
+            if doc["id"] in merged:
+                merged[doc["id"]]["score"] += 0.3 * (1 - (i / k))
+                merged[doc["id"]]["metadata"]["match_type"] = "hybrid"
+            else:
+                doc["score"] = 0.3 * (1 - (i / k))
+                doc["metadata"]["match_type"] = "keyword"
+                merged[doc["id"]] = doc
+
+        # Sort by Score
+        sorted_docs = sorted(merged.values(), key=lambda x: x.get("score", 0), reverse=True)
+        return sorted_docs[:k]
+
 
 class VectorStoreFactory:
     """Produces the correct vector store implementation based on config."""

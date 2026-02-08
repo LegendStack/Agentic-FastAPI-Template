@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
 from ..core.graph_db import GraphDBClient
-from .azure_openai import get_azure_openai_chat
+from .azure_openai import get_azure_openai_chat, get_llm_service
 from .graph_retriever import GraphRetriever
 from .nodes.entity_node import EntityNode
 from .vector_stores import VectorStoreFactory
@@ -57,9 +57,7 @@ class DocAssistantAgent:
         # In a real scenario, we'd get embeddings for the user_msg
         # Assuming our LLMService/Retriever handles simple cases or we mock it
         try:
-            from .azure_openai import LLMService
-
-            llm_service = LLMService()
+            llm_service = get_llm_service()
             query_vector = await llm_service.get_embeddings(user_msg)
             results = await self.retriever.retrieve(query_text=user_msg, query_vector=query_vector)
             context = "\n\n".join([res["content"] for res in results])

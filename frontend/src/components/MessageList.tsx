@@ -34,6 +34,14 @@ export const MessageList = ({ messages }: MessageListProps) => {
                         <div className="relative">
                             {msg.role === 'assistant' ? (
                                 <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-p:text-text-primary/95 prose-a:text-accent-primary prose-a:no-underline hover:prose-a:underline prose-strong:text-accent-primary prose-ul:list-disc prose-ul:pl-4">
+                                    {msg.content.includes("Refinement complete") && (
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/20 text-[10px] uppercase tracking-wider font-bold text-accent-primary inline-flex items-center gap-1.5">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse" />
+                                                Refinement Action
+                                            </div>
+                                        </div>
+                                    )}
                                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                                 </div>
                             ) : (

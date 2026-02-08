@@ -6,31 +6,35 @@ import { msalConfig, loginRequest } from './authConfig';
 import { ThemeProvider } from './contexts/ThemeProvider';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ProjectProvider, useProjectContext } from './hooks/useProjectContext';
-import { ProjectSelector } from './components/ProjectSelector';
 import { OracleDrawer } from './components/OracleDrawer';
 import { ConversationHistory } from './components/ConversationHistory';
 import { MessageList } from './components/MessageList';
 import { ArtifactBoard } from './components/ArtifactBoard';
+import { JiraBrowser } from './components/JiraBrowser';
 import { useBacklog } from './hooks/useBacklog';
-import { Layers, LogOut, User, LayoutDashboard, Sparkles, ChevronLeft, BarChart3 } from 'lucide-react';
+import { Search, LogOut, User, Sparkles, ChevronLeft, BarChart3, Layers } from 'lucide-react';
 import { ValueDashboard } from './components/ValueDashboard';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 const queryClient = new QueryClient();
 
-const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => void }) => {
+const Dashboard = () => {
   const { instance, accounts } = useMsal();
   const {
     selectedProject,
     setProject,
-    selectedEpic
+    selectedEpic,
+    setSelectedEpic
   } = useProjectContext();
   const artifactPanelRef = usePanelRef();
   const [isArtifactCollapsed, setIsArtifactCollapsed] = useState(false);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [isValueDashboardOpen, setIsValueDashboardOpen] = useState(false);
+  const [isJiraBrowserOpen, setIsJiraBrowserOpen] = useState(false);
+  const [prefillMessage, setPrefillMessage] = useState<string | null>(null);
+  const [isFetchingEpic, setIsFetchingEpic] = useState(false);
 
   const {
     stories,
@@ -49,7 +53,10 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
     jiraBaseUrl,
     saveToJira,
     isSavingToJira,
-    currentEpic
+    currentEpic,
+    importSpec,
+    isImporting,
+    isLocked
   } = useBacklog();
 
   const handleSelectThread = async (threadId: string) => {
@@ -74,6 +81,56 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
     setStories(prev => prev.filter(s => s.id !== id));
   };
 
+  const handleDecomposeEpic = async (epicOverride?: { key: string, summary: string }) => {
+    const epic = epicOverride || selectedEpic || currentEpic;
+    if (!epic || !epic.key) {
+      setIsJiraBrowserOpen(true);
+      return;
+    }
+
+    // If we're overriding, update context too for visibility
+    if (epicOverride) {
+      setSelectedEpic({ id: 'search-result', key: epicOverride.key, summary: epicOverride.summary });
+    }
+
+    setIsFetchingEpic(true);
+    try {
+      const response = await fetch(`/api/v1/jira/issues/${epic.key}`);
+      if (!response.ok) throw new Error('Failed to fetch epic details');
+
+      const data = await response.json();
+      const description = data.description || "";
+
+      // Construct the prompt
+      const prompt = `Decompose this epic:\n\n${description}`;
+      setPrefillMessage(prompt);
+
+    } catch (error) {
+      console.error("Error fetching epic:", error);
+      setPrefillMessage(`Decompose this epic: ${epic.summary || epic.key}`);
+    } finally {
+      setIsFetchingEpic(false);
+    }
+  };
+
+  const handleImproveStory = async (story: { key: string, summary: string }) => {
+    // Similar to decompose but for a specific story refinement
+    setIsFetchingEpic(true);
+    try {
+      const response = await fetch(`/api/v1/jira/issues/${story.key}`);
+      if (!response.ok) throw new Error('Failed to fetch story details');
+      const data = await response.json();
+
+      const prompt = `Refine and improve this story:\n\n**${story.key}: ${story.summary}**\n\n${data.description || ""}`;
+      setPrefillMessage(prompt);
+      // If we want it to be automatic, we could call handleRefine(prompt) here
+    } catch (error) {
+      setPrefillMessage(`Refine and improve this story: ${story.key}: ${story.summary}`);
+    } finally {
+      setIsFetchingEpic(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-bg-primary overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
@@ -95,18 +152,18 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
 
         <div className={`px-4 mt-4 ${isSidebarMinimized ? 'px-2' : ''}`}>
           <button
-            onClick={() => {
-              onOpenProjectSelector();
-            }}
-            title={isSidebarMinimized ? `Project: ${selectedProject}` : "Change Project"}
-            className={`flex items-center gap-3 py-3 rounded-xl transition-all text-text-secondary hover:text-accent-primary hover:bg-accent-primary/10 border border-border-primary hover:border-accent-primary/30 ${isSidebarMinimized ? 'w-full justify-center px-0' : 'w-full px-4'}`}
+            onClick={() => setIsJiraBrowserOpen(!isJiraBrowserOpen)}
+            title={isSidebarMinimized ? `Jira Browser: ${selectedProject || 'Search'}` : "Open Universal Search"}
+            className={`flex items-center gap-3 py-3 rounded-xl transition-all text-text-secondary hover:text-accent-primary hover:bg-accent-primary/10 border border-border-primary hover:border-accent-primary/30 mt-2 ${isSidebarMinimized ? 'w-full justify-center px-0' : 'w-full px-4'} ${isJiraBrowserOpen ? 'bg-accent-primary/10 border-accent-primary/30 text-accent-primary shadow-[0_0_15px_rgba(100,255,218,0.1)]' : ''}`}
           >
-            <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
+            <Search className="w-5 h-5 flex-shrink-0" />
             {!isSidebarMinimized && (
               <div className="flex-1 flex items-center justify-between overflow-hidden">
-                <span className="text-sm font-semibold truncate">Project</span>
+                <span className="text-sm font-semibold truncate uppercase tracking-tight">Jira Explorer</span>
                 {selectedProject && (
-                  <span className="text-[10px] text-accent-primary font-mono truncate ml-2">{selectedProject}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary font-mono truncate ml-2 border border-accent-primary/20">
+                    {selectedProject}
+                  </span>
                 )}
               </div>
             )}
@@ -158,59 +215,90 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
         </div>
       </aside>
 
+      {/* Jira Browser Panel (Hierarchical) */}
+      <AnimatePresence>
+        {isJiraBrowserOpen && (
+          <JiraBrowser
+            onDecomposeEpic={(epic) => {
+              handleDecomposeEpic(); // Already uses selectedEpic logic, but we can update it
+              // Or better, trigger it directly with the passed epic info
+              setProject(epic.key.split('-')[0]); // Ensure project context matches
+              // Note: handleDecomposeEpic needs to be updated to take an optional epic
+            }}
+            onImproveStory={handleImproveStory}
+            onClose={() => setIsJiraBrowserOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Main Content: Resizable Split View */}
       <div className="flex-1 flex overflow-hidden">
         <PanelGroup orientation="horizontal">
           <Panel defaultSize={40} minSize={25}>
             <main className="h-full flex flex-col border-r border-border-primary bg-bg-secondary/20 relative">
               <header className="px-8 py-6 flex items-center justify-between border-b border-border-primary shrink-0">
-                <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-                  Refinement
-                  <Sparkles className="w-4 h-4 text-accent-primary" />
-                  {selectedProject && (
-                    <div className="flex items-center gap-1.5 ml-2">
-                      <span className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
-                        {jiraBaseUrl ? (
-                          <a
-                            href={`${jiraBaseUrl}/projects/${selectedProject}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:underline"
-                          >
-                            {selectedProject}
-                          </a>
-                        ) : selectedProject}
-                      </span>
-                      {(selectedEpic || currentEpic) && (
-                        <>
-                          <span className="text-text-tertiary">/</span>
-                          <span
-                            className="px-2 py-0.5 rounded-md bg-accent-primary/20 border border-accent-primary/40 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle"
-                            title={selectedEpic?.summary || currentEpic?.title}
-                          >
-                            {jiraBaseUrl && (selectedEpic?.key || currentEpic?.key) ? (
-                              <a
-                                href={`${jiraBaseUrl}/browse/${selectedEpic?.key || currentEpic?.key}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:underline"
-                              >
-                                {selectedEpic?.key || currentEpic?.key || "NEW EPIC"}
-                              </a>
-                            ) : (
-                              selectedEpic?.key || currentEpic?.key || "NEW EPIC"
-                            )}
-                          </span>
-                          {!selectedEpic && currentEpic && !currentEpic.key && (
-                            <span className="text-[10px] text-text-tertiary italic ml-1">
-                              (to be created)
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
+                    Refinement
+                    <Sparkles className="w-4 h-4 text-accent-primary" />
+                    {selectedProject && (
+                      <div className="flex items-center gap-1.5 ml-2">
+                        <span className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
+                          {jiraBaseUrl ? (
+                            <a
+                              href={`${jiraBaseUrl}/projects/${selectedProject}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline"
+                            >
+                              {selectedProject}
+                            </a>
+                          ) : selectedProject}
+                        </span>
+                        {(selectedEpic || currentEpic) && (
+                          <>
+                            <span className="text-text-tertiary">/</span>
+                            <span
+                              className="px-2 py-0.5 rounded-md bg-accent-primary/20 border border-accent-primary/40 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle"
+                              title={selectedEpic?.summary || currentEpic?.title}
+                            >
+                              {jiraBaseUrl && (selectedEpic?.key || currentEpic?.key) ? (
+                                <a
+                                  href={`${jiraBaseUrl}/browse/${selectedEpic?.key || currentEpic?.key}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:underline"
+                                >
+                                  {selectedEpic?.key || currentEpic?.key || "NEW EPIC"}
+                                </a>
+                              ) : (
+                                selectedEpic?.key || currentEpic?.key || "NEW EPIC"
+                              )}
                             </span>
-                          )}
-                        </>
-                      )}
+                            {!selectedEpic && currentEpic && !currentEpic.key && (
+                              <span className="text-[10px] text-text-tertiary italic ml-1">
+                                (to be created)
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </h2>
+                  {(selectedEpic || currentEpic?.key) && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleDecomposeEpic()}
+                        disabled={isFetchingEpic || isProcessing || isLocked}
+                        className="text-[10px] font-bold text-accent-primary hover:text-accent-secondary transition-colors flex items-center gap-1"
+                        title="Use this epic's description to start decomposition"
+                      >
+                        <Sparkles className={`w-3 h-3 ${isFetchingEpic ? 'animate-spin' : ''}`} />
+                        {isFetchingEpic ? "Fetching..." : "Decompose this Epic"}
+                      </button>
                     </div>
                   )}
-                </h2>
+                </div>
                 <button
                   onClick={handleNewConversation}
                   className="text-[10px] font-bold text-text-secondary hover:text-text-primary transition-colors"
@@ -241,6 +329,12 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
                 onSendMessage={handleRefine}
                 isProcessing={isProcessing}
                 recommendations={recommendations}
+                onImport={importSpec}
+                isImporting={isImporting}
+                prefillMessage={prefillMessage}
+                onClearPrefill={() => setPrefillMessage(null)}
+                isLocked={isLocked}
+                isMinimized={isSidebarMinimized}
               />
             </main>
           </Panel>
@@ -260,32 +354,35 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
             </button>
           )}
 
-          <Panel
-            defaultSize={60}
-            minSize={20}
-            collapsible
-            panelRef={artifactPanelRef}
-            onResize={(size) => {
-              if (size.asPercentage === 0) setIsArtifactCollapsed(true);
-              else if (isArtifactCollapsed) setIsArtifactCollapsed(false);
-            }}
-          >
-            <div className="h-full overflow-hidden">
-              <ArtifactBoard
-                stories={stories}
-                versions={versions}
-                activeVersionId={activeVersionId}
-                projectName={selectedProject}
-                jiraBaseUrl={jiraBaseUrl}
-                onLoadVersion={loadVersion}
-                onUpdateStory={updateStoryLocally}
-                onDeleteStory={deleteStory}
-                saveToJira={() => currentThreadId && saveToJira(currentThreadId)}
-                isSavingToJira={isSavingToJira}
-                onCollapse={() => artifactPanelRef.current?.collapse()}
-              />
-            </div>
-          </Panel>
+          {stories.length > 0 && (
+            <Panel
+              defaultSize={60}
+              minSize={20}
+              collapsible
+              panelRef={artifactPanelRef}
+              onResize={(size) => {
+                if (size.asPercentage === 0) setIsArtifactCollapsed(true);
+                else if (isArtifactCollapsed) setIsArtifactCollapsed(false);
+              }}
+            >
+              <div className="h-full overflow-hidden">
+                <ArtifactBoard
+                  stories={stories}
+                  versions={versions}
+                  activeVersionId={activeVersionId}
+                  projectName={selectedProject}
+                  jiraBaseUrl={jiraBaseUrl}
+                  onLoadVersion={loadVersion}
+                  onUpdateStory={updateStoryLocally}
+                  onDeleteStory={deleteStory}
+                  saveToJira={() => currentThreadId && saveToJira(currentThreadId)}
+                  isSavingToJira={isSavingToJira}
+                  onCollapse={() => artifactPanelRef.current?.collapse()}
+                  isLocked={isLocked}
+                />
+              </div>
+            </Panel>
+          )}
         </PanelGroup>
       </div>
 
@@ -296,24 +393,17 @@ const Dashboard = ({ onOpenProjectSelector }: { onOpenProjectSelector: () => voi
 
 const AuthWrapper = () => {
   const { instance } = useMsal();
-  const { selectedProject } = useProjectContext();
-  const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(!selectedProject);
   const bypassAuth = import.meta.env.VITE_BYPASS_AUTH === 'true';
-
   if (bypassAuth) {
     return (
-      <>
-        <Dashboard onOpenProjectSelector={() => setIsProjectSelectorOpen(true)} />
-        {isProjectSelectorOpen && <ProjectSelector onClose={() => setIsProjectSelectorOpen(false)} />}
-      </>
+      <Dashboard />
     );
   }
 
   return (
     <>
       <AuthenticatedTemplate>
-        <Dashboard onOpenProjectSelector={() => setIsProjectSelectorOpen(true)} />
-        {isProjectSelectorOpen && <ProjectSelector onClose={() => setIsProjectSelectorOpen(false)} />}
+        <Dashboard />
       </AuthenticatedTemplate>
       <UnauthenticatedTemplate>
         <div className="min-h-screen flex flex-col items-center justify-center bg-bg-primary p-6 pt-20 transition-colors duration-300">

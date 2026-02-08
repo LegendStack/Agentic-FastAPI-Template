@@ -7,7 +7,7 @@ Ensures LLM outputs are safe and grounded in the provided context.
 import logging
 from typing import Any, Dict
 
-from ..agents.azure_openai import LLMService
+from ..agents.azure_openai import LLMService, get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class Moderator:
     """
 
     def __init__(self, llm_service: LLMService | None = None):
-        self.llm_service = llm_service or LLMService()
+        self.llm_service = llm_service or get_llm_service()
 
     async def check_hallucination(self, context: str, answer: str) -> Dict[str, Any]:
         """

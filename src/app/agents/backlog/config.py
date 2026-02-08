@@ -71,6 +71,7 @@ class BacklogAgentConfig:
     # === Quality & Validation ===
     ENABLE_VALIDATION: bool = True  # Validate story structure
     REQUIRE_ACCEPTANCE_CRITERIA: bool = True  # Stories must have AC
+    PREVENT_DUPLICATE_DECOMPOSITION: bool = True  # Semantic search for existing epics
 
     # === Resilience ===
     MAX_RETRIES: int = 3  # LLM retry attempts

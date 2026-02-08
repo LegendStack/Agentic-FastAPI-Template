@@ -34,6 +34,7 @@ from typing import Any, Literal
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
+from ...core.config import settings
 from .config import BacklogAgentConfig
 from .nodes import (
     DecomposeNode,
@@ -42,9 +43,12 @@ from .nodes import (
     InputNode,
     PrioritizeNode,
     RefineNode,
+    CriticNode,
+    TestGenNode,
 )
 from .schemas import DecompositionResult
 from .state import BacklogAgentState
+from ..conversations import ConversationService
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +135,8 @@ class BacklogAssistantAgent:
         self.input_node = InputNode()
         self.decompose_node = DecomposeNode(config=self.config)
         self.refine_node = RefineNode(config=self.config)
+        self.critic_node = CriticNode(config=self.config)
+        self.test_gen_node = TestGenNode(config=self.config)
         self.format_node = FormatNode(config=self.config)
         self.prioritize_node = PrioritizeNode(config=self.config)
         self.save_node = ExportNode(config=self.config)
@@ -140,12 +146,9 @@ class BacklogAssistantAgent:
         Build the LangGraph workflow.
 
         Flow:
-            START → input → [decompose | refine] → format → END
-                                                      ↓
-                                           (optional) export
-
-        The graph routes based on whether this is a new decomposition
-        or a refinement of an existing one.
+            START → input → [decompose | refine] → critic → [prioritize | test_gen] → format → END
+                                                                  ↓
+                                                       (optional) export
         """
         workflow = StateGraph(BacklogAgentState)
 
@@ -153,6 +156,8 @@ class BacklogAssistantAgent:
         workflow.add_node("input", self.input_node)
         workflow.add_node("decompose", self.decompose_node)
         workflow.add_node("refine", self.refine_node)
+        workflow.add_node("critic", self.critic_node)
+        workflow.add_node("test_gen", self.test_gen_node)
         workflow.add_node("format", self.format_node)
         workflow.add_node("prioritize", self.prioritize_node)
         workflow.add_node("save_to_jira", self.save_node)
@@ -172,9 +177,15 @@ class BacklogAssistantAgent:
             },
         )
 
-        # Decompose and Refine go to Prioritize
-        workflow.add_edge("decompose", "prioritize")
-        workflow.add_edge("refine", "prioritize")
+        # Decompose and Refine go to Critic
+        workflow.add_edge("decompose", "critic")
+        workflow.add_edge("refine", "critic")
+        
+        # Critic goes to parallel branches: Prioritize and TestGen
+        # Note: LangGraph doesn't support true parallel branching easily without fan-out/fan-in.
+        # We'll sequence them: Critic -> TestGen -> Prioritize
+        workflow.add_edge("critic", "test_gen")
+        workflow.add_edge("test_gen", "prioritize")
         
         # Prioritize goes to format
         workflow.add_edge("prioritize", "format")
@@ -212,6 +223,7 @@ class BacklogAssistantAgent:
         thread_id: str | None = None,
         project_key: str | None = None,
         parent_epic_id: str | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Decompose an epic into user stories.
@@ -234,19 +246,83 @@ class BacklogAssistantAgent:
         if context:
             full_input += f"\n\nContext: {context}"
 
+        # Check for duplicates if mocks disabled
+        if not self.config.USE_MOCKS:
+            dup_thread_id = await self._check_duplicate_epic(full_input)
+            if dup_thread_id:
+                logger.info(f"Retrieved existing decomposition for thread {dup_thread_id}")
+                result = await self.get_stories(dup_thread_id)
+                if result.get("stories"):
+                     current_result = result.get("result", {})
+                     return {
+                         "thread_id": dup_thread_id,
+                         "response": current_result,
+                         "formatted_output": None,
+                         "stories": result.get("stories", []),
+                         "summary": current_result.get("summary") if isinstance(current_result, dict) else getattr(current_result, "summary", None),
+                         "story_count": len(result.get("stories", [])),
+                         "output_format": output_format,
+                         "metadata": {**result.get("metadata", {}), "is_duplicate": True},
+                         "usage": {},
+                     }
+
         return await self.chat(
             thread_id=thread_id,
             message=full_input,
             output_format=output_format,
             project_key=project_key,
             parent_epic_id=parent_epic_id,
+            user_id=user_id,
         )
+
+    async def _check_duplicate_epic(self, epic_description: str) -> str | None:
+        """
+        Check if an epic with similar description already exists.
+        Returns the thread_id of the existing epic if found.
+        """
+        if not self.checkpointer:
+            return None
+            
+        try:
+            from ..vector_stores import VectorStoreFactory
+            from ..azure_openai import get_llm_service
+            
+            # We initialize store without DB session as we only read
+            store = VectorStoreFactory.get_store(None)
+            llm_service = get_llm_service()
+            
+            # Use only first 1000 chars for embedding to save tokens/time
+            query_vector = await llm_service.get_embeddings(epic_description[:1000])
+            
+            # Search for epics in the archive
+            # Note: We filter by source_id="epic_archive" which is set by DecomposeNode._archive_epic
+            results = await store.similarity_search(
+                query_vector, 
+                k=1, 
+                filters={"source_id": "epic_archive"}
+            )
+            
+            if results:
+                match = results[0]
+                score = match.get("score", 0)
+                # High threshold for semantic clone (0.92 is very high)
+                if score > 0.92:
+                    meta = match.get("metadata", {})
+                    thread_id = meta.get("thread_id")
+                    if thread_id:
+                        logger.info(f"BacklogAssistantAgent: Found duplicate epic (score: {score:.4f}) -> thread {thread_id}")
+                        return thread_id
+            
+            return None
+        except Exception as e:
+            logger.warning(f"BacklogAssistantAgent: Duplicate epic check failed - {e}")
+            return None
 
     async def _generate_smart_title(self, message: str) -> str:
         """Generate a concise 3-5 word title from the user message."""
         try:
-            from ..azure_openai import LLMService
-            llm = LLMService()
+            from ..azure_openai import get_llm_service
+            llm = get_llm_service()
             
             prompt = f"""Generate a concise, professional title (3-5 words) for a JIRA epic decomposition task based on this user message.
             
@@ -278,6 +354,7 @@ class BacklogAssistantAgent:
         initial_stories: list[Any] | None = None,
         project_key: str | None = None,
         parent_epic_id: str | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Process a chat message for decomposition or refinement.
@@ -310,6 +387,17 @@ class BacklogAssistantAgent:
                 saved_state = await self.graph.aget_state(config)
                 if saved_state and saved_state.values:
                     existing_state = saved_state.values
+                    
+                    # Lock Check: Prevent edits if already exported to Jira
+                    if existing_state.get("is_locked"):
+                        logger.warning(f"BacklogAgent: Rejected chat for locked thread {thread_id}")
+                        return {
+                            "thread_id": thread_id,
+                            "error": "CONVERSATION_LOCKED: This decomposition has been successfully saved to JIRA. To maintain data integrity, further refinements are disabled.",
+                            "response": existing_state.get("current_result"),
+                            "stories": existing_state.get("stories", []),
+                            "metadata": existing_state.get("metadata", {}),
+                        }
             except Exception:
                 pass  # No saved state, will start fresh
 
@@ -337,6 +425,7 @@ class BacklogAssistantAgent:
             "tenant_id": None,
             "project_key": project_key or existing_state.get("project_key"),
             "parent_epic_id": parent_epic_id or existing_state.get("parent_epic_id"),
+            "user_id": user_id or existing_state.get("user_id"),
             "error": None,
             "metadata": existing_state.get("metadata", {}),
         }
@@ -400,6 +489,7 @@ class BacklogAssistantAgent:
             "summary": current_result.summary if current_result else None,
             "story_count": len(final_state.get("stories", [])),
             "output_format": final_state.get("output_format"),
+            "is_locked": final_state.get("is_locked", False),
             "metadata": {
                 "is_refinement": not final_state.get("is_first_message", True),
                 "config": {
@@ -410,7 +500,6 @@ class BacklogAssistantAgent:
             "usage": final_state.get("usage_metadata"),
         }
 
-        # Add assistant message to conversation
         if current_result and self.checkpointer and hasattr(self.checkpointer, "db"):
             from ..conversations import ConversationService
 
@@ -438,9 +527,38 @@ class BacklogAssistantAgent:
                 summary_title = current_result.summary.split("\n")[0][:50]
                 await conversation_service.update_conversation_title(thread_id, summary_title)
 
+        # Audit Logging for Refinement (Phase 57)
+        try:
+            # Only log if it was a refinement (not first message) and we have a user_id
+            if not final_state.get("is_first_message", True) and (user_id or existing_state.get("user_id")):
+                from ...services.audit_service import AuditService
+                from ...core.db.database import async_get_db
+                
+                # Resolve user_id if not passed directly
+                effective_user_id = user_id or existing_state.get("user_id")
+
+                details = {
+                    "message_summary": message[:100] + "..." if len(message) > 100 else message,
+                    "story_count": len(final_state.get("stories", [])),
+                    "project_key": project_key or final_state.get("project_key"),
+                }
+                
+                async with async_get_db() as db:
+                    audit = AuditService(db)
+                    await audit.log_event(
+                        action="REFINEMENT",
+                        resource_type="BACKLOG",
+                        resource_id=thread_id, # Use thread_id as resource for backlog refinement
+                        details=details,
+                        user_id=effective_user_id,
+                        thread_id=thread_id,
+                    )
+        except Exception as e:
+            logger.warning(f"BacklogAgent: Failed to log refinement audit - {e}")
+
         return response
 
-    async def save_to_jira(self, thread_id: str) -> dict[str, Any]:
+    async def save_to_jira(self, thread_id: str, user_id: str | None = None) -> dict[str, Any]:
         """
         Save the current decomposition to JIRA.
 
@@ -448,6 +566,7 @@ class BacklogAssistantAgent:
 
         Args:
             thread_id: Thread ID with existing decomposition
+            user_id: ID of the user triggering the export (for audit logging)
 
         Returns:
             Save result with created issue keys
@@ -481,6 +600,7 @@ class BacklogAssistantAgent:
                 }
 
             state = saved_state.values
+            state = saved_state.values
         except Exception as e:
             return {
                 "thread_id": thread_id,
@@ -488,23 +608,30 @@ class BacklogAssistantAgent:
                 "export_result": None,
             }
 
+        # Inject user_id into state for Audit Logging
+        if user_id:
+            state["user_id"] = user_id
+
         # Run save node
         save_result = await self.save_node(state)
         
-        # Update state with Jira info if successful
         if save_result.get("stories") and self.checkpointer:
-            new_state = {**state, "stories": save_result["stories"]}
-            await self.graph.aupdate_state(config, new_state)
+            # Prepare updates
+            new_stories = save_result["stories"]
+            update_dict = {
+                "stories": new_stories,
+                "is_locked": True  # Phase 8 Fix: Persist lock status
+            }
             
-            # Post links back to conversation
+            # Post links back to conversation and update state with message
             if hasattr(self.checkpointer, "db"):
-                from ..conversations import ConversationService
                 conversation_service = ConversationService(self.checkpointer.db)
                 
                 # save_result IS the dictionary returned by ExportNode.__call__
                 # which contains "export_result"
                 export_result = save_result.get("export_result", {})
                 issues = export_result.get("issues", [])
+                
                 if issues:
                     # Separate Epic from stories
                     epic_key = export_result.get("epic_key")
@@ -539,16 +666,29 @@ class BacklogAssistantAgent:
                     for issue in story_issues:
                         links_text += f"- [{issue['jira_key']}]({issue['url']}) - {issue.get('summary', '')}\n"
                     
-                    await conversation_service.add_message(
-                        thread_id=thread_id,
-                        role="assistant",
-                        content=links_text
-                    )
+                    try:
+                        await conversation_service.add_message(
+                            thread_id=thread_id,
+                            role="assistant",
+                            content=links_text
+                        )
+                        # Add to graph state messages as well so it appears in get_stories
+                        messages = state.get("messages", [])
+                        new_message = {"role": "assistant", "content": links_text}
+                        update_dict["messages"] = messages + [new_message]
+                        
+                    except Exception:
+                        logger.exception(f"BacklogAssistantAgent: Failed to post Jira links message to thread {thread_id}")
+
+            # Update state ONCE with stories and potentially new message
+            new_state = {**state, **update_dict}
+            await self.graph.aupdate_state(config, new_state)
 
         return {
             "thread_id": thread_id,
             "export_result": save_result.get("export_result"),
             "stories": save_result.get("stories", []),
+            "is_locked": True,
             "error": save_result.get("error"),
         }
 
@@ -601,6 +741,7 @@ class BacklogAssistantAgent:
                 "stories": [s.model_dump() if hasattr(s, "model_dump") else s for s in state.get("stories", [])],
                 "result": current_result.model_dump() if current_result else None,
                 "messages": state.get("messages", []),
+                "is_locked": state.get("is_locked", False),
                 "metadata": metadata,
             }
 
@@ -654,6 +795,7 @@ class BacklogAssistantAgent:
                 "result": current_result.model_dump() if current_result else None,
                 "summary": current_result.summary if current_result else None,
                 "messages": state.get("messages", []),
+                "is_locked": state.get("is_locked", False),
             }
 
         except Exception as e:

@@ -16,7 +16,7 @@ from ..schemas import DecompositionResult, UserStory, Epic
 from ..state import BacklogAgentState
 from ....core.db.database import async_get_db
 from ...vector_stores import VectorStoreFactory
-from ...azure_openai import LLMService
+from ...azure_openai import LLMService, get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -80,21 +80,28 @@ class ExportNode:
                 # 1. Export to JIRA
                 result = await self._jira_export(current_result, state)
                 
-                # 2. Index to Azure AI Search (Phase 13)
+                # 2. Audit Log (Phase 49)
+                if result.get("status") in ["success", "partial_success"]:
+                    await self._log_audit_event(state, result)
+                
+                # 3. Index to Azure AI Search (Phase 13)
                 if result.get("status") in ["success", "partial_success"]:
                     await self._index_stories(current_result.stories)
 
             logger.info(f"ExportNode: Export completed - {result['status']}")
 
+            is_locked = result.get("status") in ["success", "partial_success"]
+
             return {
                 "export_result": result,
                 "stories": result.get("stories", []),
                 "current_result": current_result,
+                "is_locked": is_locked,
                 "error": None,
             }
 
         except Exception as e:
-            logger.error(f"ExportNode: Error - {e}")
+            logger.error(f"ExportNode: CRITICAL ERROR - {e}", exc_info=True)
             return {
                 "export_result": {
                     "status": "error",
@@ -169,8 +176,24 @@ class ExportNode:
         current_parent_epic_id = state.get("parent_epic_id")
 
         async with httpx.AsyncClient() as client:
-            # Create parent Epic if missing (Phase 46)
-            if not current_parent_epic_id and result.epic:
+            # 1. Handling Parent Epic (Create or Update)
+            if current_parent_epic_id:
+                # Epic exists, try to update it if we have fresh content
+                if result.epic:
+                    try:
+                        logger.info(f"ExportNode: Updating existing Epic {current_parent_epic_id}")
+                        await self._update_jira_issue(
+                            client=client, 
+                            base_url=base_url, 
+                            auth=auth, 
+                            jira_key=current_parent_epic_id, 
+                            story_or_epic=result.epic
+                        )
+                        # We don't add to created_issues as it's an update, but we could log it.
+                    except Exception as e:
+                        logger.warning(f"ExportNode: Failed to update Epic {current_parent_epic_id}: {e}")
+            elif result.epic:
+                # No parent epic, create new one
                 try:
                     logger.info(f"ExportNode: Creating new Epic '{result.epic.title}'")
                     current_parent_epic_id = await self._create_jira_epic(
@@ -181,7 +204,6 @@ class ExportNode:
                         epic=result.epic
                     )
                     logger.info(f"ExportNode: New Epic created with key {current_parent_epic_id}")
-                    # Include Epic in the created issues list for feedback (Phase 46)
                     created_issues.append({
                         "internal_id": "EPIC",
                         "jira_key": current_parent_epic_id,
@@ -204,25 +226,61 @@ class ExportNode:
                         "error": f"Failed to create parent Epic: {str(e)}"
                     })
 
-            # Create each story as a JIRA issue
+            # 2. Handling Stories (Create or Update)
             for story in result.stories:
                 try:
-                    issue = await self._create_jira_issue(
-                        client=client,
-                        base_url=base_url,
-                        auth=auth,
-                        project_key=project_key,
-                        story=story,
-                        parent_epic_id=current_parent_epic_id,
-                    )
-                    created_issues.append(issue)
-                except Exception as e:
-                    errors.append(
-                        {
-                            "story_id": story.id,
-                            "error": str(e),
-                        }
-                    )
+                    if story.jira_key:
+                        # Attempt Update
+                        try:
+                            await self._update_jira_issue(
+                                client=client,
+                                base_url=base_url,
+                                auth=auth,
+                                jira_key=story.jira_key,
+                                story_or_epic=story
+                            )
+                            created_issues.append({
+                                "internal_id": story.id,
+                                "jira_key": story.jira_key,
+                                "url": f"{base_url}/browse/{story.jira_key}",
+                                "status": "updated",
+                                "summary": story.title,
+                            })
+                        except httpx.HTTPStatusError as e:
+                            if e.response.status_code == 404:
+                                logger.warning(f"ExportNode: Issue {story.jira_key} not found (404), recreating.")
+                                # Fallback to creation below
+                                raise ValueError("Force Recreate")
+                            else:
+                                raise e
+                    else:
+                        raise ValueError("Create New")
+
+                except (ValueError, Exception) as attempt_create_exception:
+                    # Catch fallback or genuine create request
+                    if isinstance(attempt_create_exception, ValueError) and "Force Recreate" not in str(attempt_create_exception) and "Create New" not in str(attempt_create_exception):
+                         # verification that this is not our control flow exception
+                         errors.append({"story_id": story.id, "error": str(attempt_create_exception)})
+                         continue
+
+                    # Fallback to Creation
+                    try:
+                        issue = await self._create_jira_issue(
+                            client=client,
+                            base_url=base_url,
+                            auth=auth,
+                            project_key=project_key,
+                            story=story,
+                            parent_epic_id=current_parent_epic_id,
+                        )
+                        created_issues.append(issue)
+                    except Exception as e:
+                        errors.append(
+                            {
+                                "story_id": story.id,
+                                "error": str(e),
+                            }
+                        )
 
         status = "success" if not errors else "partial_success" if created_issues else "error"
 
@@ -237,10 +295,52 @@ class ExportNode:
             "status": status,
             "message": f"Created {len(created_issues)} of {len(result.stories)} issues",
             "issues": created_issues,
-            "errors": errors if errors else None,
             "epic_key": current_parent_epic_id,
             "stories": result.stories, # Pass updated stories back
         }
+
+    async def _log_audit_event(self, state: BacklogAgentState, result: dict[str, Any]) -> None:
+        """Log the JIRA export event for compliance."""
+        try:
+            from ....services.audit_service import AuditService
+            
+            user_id = state.get("user_id")
+            thread_id = state.get("thread_id")
+            project_key = state.get("project_key")
+            
+            # Don't log if we don't have a user context (system/anonymous)
+            # Actually, we should log anonymous actions too for security
+            
+            details = {
+                "project_key": project_key,
+                "issue_count": len(result.get("issues", [])),
+                "status": result.get("status"),
+                "epic_key": result.get("epic_key"),
+                "issues": [i.get("jira_key") for i in result.get("issues", [])]
+            }
+
+            # Determine granular action
+            action = "JIRA_EXPORT"
+            issues = result.get("issues", [])
+            if issues:
+                if all(i.get("status") == "updated" for i in issues):
+                    action = "JIRA_UPDATE"
+                elif any(i.get("status") == "updated" for i in issues):
+                    action = "JIRA_SYNC"
+
+            async with async_get_db() as db:
+                audit_service = AuditService(db)
+                await audit_service.log_event(
+                    action=action,
+                    resource_type="EPIC",
+                    resource_id=result.get("epic_key") or "N/A",
+                    details=details,
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    status=result.get("status", "UNKNOWN"),
+                )
+        except Exception as e:
+            logger.error(f"ExportNode: Failed to log audit event - {e}")
 
     async def _create_jira_epic(
         self,
@@ -256,28 +356,37 @@ class ExportNode:
             "issuetype": {"name": self.config.JIRA_EPIC_ISSUE_TYPE},
             "summary": epic.title,
             "description": epic.description,
-            "labels": self.config.DEFAULT_TAGS or [],
+            "labels": (self.config.DEFAULT_TAGS or []) + ["ai"],
         }
 
-        # Only add Epic Name if explicitly configured (required for Company-managed, usually customfield_10011)
-        # Skip for Team-managed projects where it causes 400 errors.
+        # Strategy 1: Try with Epic Name (Classic/Company-managed)
         if self.config.JIRA_EPIC_NAME_FIELD:
             fields[self.config.JIRA_EPIC_NAME_FIELD] = epic.title
         
         payload = {"fields": fields}
-        
         url = f"{base_url}/rest/api/2/issue"
-        logger.info(f"JIRA Epic Request: {payload}")
-        response = await client.post(url, json=payload, auth=auth)
         
         try:
+            logger.info(f"JIRA Epic Request (Attempt 1): {payload}")
+            response = await client.post(url, json=payload, auth=auth)
             response.raise_for_status()
+            return response.json()["key"]
         except httpx.HTTPStatusError as e:
-            # Re-raise to be caught in _jira_export with more context
-            raise
-            
-        data = response.json()
-        return data["key"]
+            # If 400 Bad Request and it complains about the custom field (Epic Name)
+            # It's likely a Team-managed project where this field is not allowed/needed.
+            if e.response.status_code == 400 and self.config.JIRA_EPIC_NAME_FIELD in e.response.text:
+                logger.warning(f"ExportNode: Epic Name field rejected. Retrying without it. Error: {e.response.text}")
+                
+                # Strategy 2: Retry without Epic Name
+                del fields[self.config.JIRA_EPIC_NAME_FIELD]
+                payload = {"fields": fields}
+                logger.info(f"JIRA Epic Request (Attempt 2 - Retry): {payload}")
+                
+                response = await client.post(url, json=payload, auth=auth)
+                response.raise_for_status()
+                return response.json()["key"]
+            else:
+                raise e
 
     async def _create_jira_issue(
         self,
@@ -294,14 +403,8 @@ class ExportNode:
             "project": {"key": project_key},
             "issuetype": {"name": self.config.JIRA_ISSUE_TYPE},
             "summary": story.title,
-            "labels": (story.tags or []) + (self.config.DEFAULT_TAGS or []),
+            "labels": (story.tags or []) + (self.config.DEFAULT_TAGS or []) + ["ai"],
         }
-
-        # Handle parent Epic linking
-        if parent_epic_id:
-            # Note: Field name for Epic Link varies by JIRA instance (usually customfield_10014)
-            # We use the config-defined field
-            fields[self.config.JIRA_EPIC_LINK_FIELD] = parent_epic_id
 
         # Build description based on what's NOT mapped to custom fields
         description_parts = [story.description, ""]
@@ -359,18 +462,50 @@ class ExportNode:
         if story.dependencies and self.config.JIRA_FIELD_MAP_DEPENDENCIES:
             fields[self.config.JIRA_FIELD_MAP_DEPENDENCIES] = ", ".join(story.dependencies)
 
-        payload = {"fields": fields}
+        # LINKING STRATEGY
+        # 1. Try "Epic Link" (Classic Project)
+        # 2. If 400 error, try "Parent" (Team/Next-Gen Project)
+        
+        # Prepare payload for Strategy 1
+        payload = {"fields": fields.copy()}
+        if parent_epic_id:
+            payload["fields"][self.config.JIRA_EPIC_LINK_FIELD] = parent_epic_id
 
         # LOG PAYLOAD FOR DEBUGGING
-        logger.info(f"JIRA Payload: {payload}")
+        logger.info(f"JIRA Payload (Attempt 1 - Epic Link): {payload}")
 
-        response = await client.post(
-            f"{base_url}/rest/api/2/issue",
-            json=payload,
-            auth=auth,
-            timeout=30.0,
-        )
-        response.raise_for_status()
+        try:
+            response = await client.post(
+                f"{base_url}/rest/api/2/issue",
+                json=payload,
+                auth=auth,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+             # If 400 and complains about Epic Link, try "Parent" field (Team-managed)
+            if e.response.status_code == 400 and (
+                self.config.JIRA_EPIC_LINK_FIELD in e.response.text 
+                or "Epic Link" in e.response.text
+            ):
+                logger.warning(f"ExportNode: 'Epic Link' field rejected. Retrying with 'Parent' field. Error: {e.response.text}")
+                
+                # Strategy 2: Use "parent" field
+                if self.config.JIRA_EPIC_LINK_FIELD in payload["fields"]:
+                    del payload["fields"][self.config.JIRA_EPIC_LINK_FIELD]
+                
+                payload["fields"]["parent"] = {"key": parent_epic_id}
+                
+                logger.info(f"JIRA Payload (Attempt 2 - Parent Link): {payload}")
+                response = await client.post(
+                    f"{base_url}/rest/api/2/issue",
+                    json=payload,
+                    auth=auth,
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+            else:
+                raise e
 
         data = response.json()
         return {
@@ -381,12 +516,71 @@ class ExportNode:
             "summary": story.title,
         }
 
+    async def _update_jira_issue(
+        self,
+        client: httpx.AsyncClient,
+        base_url: str,
+        auth: tuple[str, str],
+        jira_key: str,
+        story_or_epic: UserStory | Epic,
+    ) -> None:
+        """Update an existing JIRA issue."""
+        # Detect if it's a Story or Epic to determine proper description field
+        is_epic = isinstance(story_or_epic, Epic)
+        
+        fields = {
+            "summary": story_or_epic.title,
+            "labels": (getattr(story_or_epic, 'tags', []) or []) + (self.config.DEFAULT_TAGS or []) + ["ai"]
+        }
+
+        # Build description
+        description = story_or_epic.description
+        
+        # If it's a UserStory, append rich fields
+        if not is_epic and isinstance(story_or_epic, UserStory):
+            description_parts = [description, ""]
+            
+            # Acceptance Criteria
+            if story_or_epic.acceptance_criteria:
+                ac_text = "\n".join([f"* {ac.description}" for ac in story_or_epic.acceptance_criteria])
+                # Note: We rely on standard description for updates to avoid complexity with custom fields mapping 
+                # unless explicitly configured. For now, we append to description.
+                if self.config.JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA:
+                    fields[self.config.JIRA_FIELD_MAP_ACCEPTANCE_CRITERIA] = ac_text
+                else:
+                    description_parts.append("h3. Acceptance Criteria")
+                    description_parts.append(ac_text)
+                    description_parts.append("")
+
+            # Technical Notes
+            if story_or_epic.technical_notes:
+                tech_notes_text = "\n".join([f"* {note}" for note in story_or_epic.technical_notes])
+                if self.config.JIRA_FIELD_MAP_TECH_NOTES:
+                    fields[self.config.JIRA_FIELD_MAP_TECH_NOTES] = tech_notes_text
+                else:
+                    description_parts.append("h3. Technical Notes")
+                    description_parts.append(tech_notes_text)
+                    description_parts.append("")
+            
+            description = "\n".join(description_parts).strip()
+
+        fields["description"] = description
+        
+        # Complexity/Priority updates could be added here similar to creation
+        
+        payload = {"fields": fields}
+        url = f"{base_url}/rest/api/2/issue/{jira_key}"
+        
+        logger.info(f"JIRA Update Request for {jira_key}: {payload}")
+        response = await client.put(url, json=payload, auth=auth)
+        response.raise_for_status()
+
     async def _index_stories(self, stories: list[UserStory]) -> None:
         """Index finalized stories into Azure AI Search for future memory."""
         logger.info(f"ExportNode: Indexing {len(stories)} stories into Azure AI Search")
         try:
             store = VectorStoreFactory.get_store(None)
-            llm_service = LLMService()
+            llm_service = get_llm_service()
             
             documents_to_index = []
             for story in stories:
@@ -417,6 +611,9 @@ class ExportNode:
             logger.info("ExportNode: Successfully indexed stories")
         except Exception as e:
             logger.warning(f"ExportNode: Failed to index stories - {e}")
+        finally:
+            if 'store' in locals() and hasattr(store, 'close'):
+                await store.close()
 
 
 # Convenience function for standalone testing

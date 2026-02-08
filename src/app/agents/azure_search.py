@@ -251,3 +251,6 @@ class AzureAISearchStore(BaseVectorStore):
         if self._client:
             await self._client.close()
             self._client = None
+        if self._index_client:
+            await self._index_client.close()
+            self._index_client = None

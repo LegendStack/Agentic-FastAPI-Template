@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from ...core import config
 from ...core.graph_db import GraphDBClient
 
+from ...agents.azure_openai import get_llm_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,10 +39,7 @@ class EntityNode:
 
     def __init__(self, graph_client: GraphDBClient):
         self.graph_client = graph_client
-        self.llm = AzureChatOpenAI(
-            azure_deployment=config.settings.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
-            openai_api_version=config.settings.AZURE_OPENAI_API_VERSION,
-        ).with_structured_output(EntityExtractionSchema)
+        self.llm = get_llm_service().chat_model.with_structured_output(EntityExtractionSchema)
 
     async def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """

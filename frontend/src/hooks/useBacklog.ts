@@ -27,6 +27,7 @@ export interface UserStory {
     duplicate_reason?: string;
     jira_key?: string;
     jira_url?: string;
+    test_scenarios?: string[];
 }
 
 export interface Message {
@@ -58,10 +59,10 @@ export interface DecomposeResponse {
     stories: UserStory[];
     summary: string | null;
     recommendations?: string[];
-    error?: string;
     usage?: any;
     jira_base_url?: string;
     messages?: any[];
+    is_locked?: boolean;
     metadata?: any;
     response?: {
         epic: Epic;
@@ -77,6 +78,7 @@ export const useBacklog = (initialThreadId?: string) => {
     const [recommendations, setRecommendations] = useState<string[]>([]);
     const [currentEpic, setCurrentEpic] = useState<Epic | null>(null);
     const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(initialThreadId);
+    const [isLocked, setIsLocked] = useState<boolean>(false);
     const { selectedProject, selectedEpic } = useProjectContext();
 
     // Load thread from URL on mount
@@ -202,6 +204,9 @@ export const useBacklog = (initialThreadId?: string) => {
             if (data.response?.epic) {
                 setCurrentEpic(data.response.epic);
             }
+            if (data.is_locked !== undefined) {
+                setIsLocked(data.is_locked);
+            }
         },
     });
 
@@ -222,6 +227,9 @@ export const useBacklog = (initialThreadId?: string) => {
             }
             if (response.data.response?.epic) {
                 setCurrentEpic(response.data.response.epic);
+            }
+            if (response.data.is_locked !== undefined) {
+                setIsLocked(response.data.is_locked);
             }
 
             // Use messages from backend if provided (Phase 23 fix)
@@ -266,6 +274,7 @@ export const useBacklog = (initialThreadId?: string) => {
         setActiveVersionId(null);
         setRecommendations([]);
         setCurrentThreadId(undefined);
+        setIsLocked(false);
     }, []);
 
     // Phase 43: Save to JIRA mutation
@@ -278,10 +287,30 @@ export const useBacklog = (initialThreadId?: string) => {
             if (data.stories) {
                 setStories(data.stories);
             }
+            if (data.is_locked !== undefined) {
+                setIsLocked(data.is_locked);
+            } else {
+                setIsLocked(true); // Fallback to true if we just saved
+            }
             // Refresh messages/thread to show the new JIRA links assistant message
             if (threadId) {
                 loadThread(threadId);
             }
+        }
+    });
+
+    // Import Spec Mutation
+    const importSpecMutation = useMutation({
+        mutationFn: async (file: File) => {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await api.post('/backlog/import', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            return response.data; // Returns { epic_description: "..." }
         }
     });
 
@@ -299,10 +328,13 @@ export const useBacklog = (initialThreadId?: string) => {
         updateStoryLocally,
         reset,
         jiraBaseUrl,
-        isProcessing: chatMutation.isPending,
+        isProcessing: chatMutation.isPending || importSpecMutation.isPending,
+        isLocked,
         sendMessage: chatMutation.mutate,
-        error: chatMutation.error,
+        error: chatMutation.error || importSpecMutation.error,
         saveToJira: (threadId: string) => saveToJiraMutation.mutate(threadId),
-        isSavingToJira: saveToJiraMutation.isPending
+        isSavingToJira: saveToJiraMutation.isPending,
+        importSpec: importSpecMutation.mutateAsync,
+        isImporting: importSpecMutation.isPending
     };
 };

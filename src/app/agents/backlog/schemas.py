@@ -94,6 +94,10 @@ class UserStory(BaseModel):
         default_factory=list,
         description="Story IDs this story depends on",
     )
+    test_scenarios: list[str] = Field(
+        default_factory=list,
+        description="Automated Gherkin test scenarios (Given/When/Then)",
+    )
     estimated_complexity: Literal["XS", "S", "M", "L", "XL"] | None = Field(
         None,
         description="T-shirt size complexity estimate",
@@ -250,6 +254,10 @@ class DecompositionResult(BaseModel):
     stories: list[UserStory] = Field(
         default_factory=list,
         description="List of decomposed user stories",
+    )
+    conversation_title: str | None = Field(
+        None,
+        description="Smart title for this conversation (3-5 words)",
     )
     summary: str = Field(
         ...,

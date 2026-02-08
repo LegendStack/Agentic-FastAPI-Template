@@ -202,3 +202,9 @@ class RedisVectorStore(BaseVectorStore):
             pipeline.delete(f"doc:{self.index_name}:{doc_id}")
         await pipeline.execute()
         logger.info(f"RedisVectorStore: Deleted {len(ids)} documents.")
+
+    async def close(self):
+        """Close the Redis client connection."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
