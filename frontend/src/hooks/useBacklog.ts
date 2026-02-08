@@ -83,6 +83,18 @@ export const useBacklog = (initialThreadId?: string) => {
 
     // Load thread from URL on mount
     useEffect(() => {
+        const fetchJiraConfig = async () => {
+            try {
+                const response = await api.get('/jira/config');
+                if (response.data.base_url) {
+                    setJiraBaseUrl(response.data.base_url);
+                }
+            } catch (err) {
+                console.error("Failed to fetch Jira config", err);
+            }
+        };
+        fetchJiraConfig();
+
         const params = new URLSearchParams(window.location.search);
         const urlThreadId = params.get('thread');
         if (urlThreadId && !currentThreadId) {

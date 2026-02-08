@@ -227,6 +227,7 @@ const Dashboard = () => {
             }}
             onImproveStory={handleImproveStory}
             onClose={() => setIsJiraBrowserOpen(false)}
+            jiraBaseUrl={jiraBaseUrl}
           />
         )}
       </AnimatePresence>

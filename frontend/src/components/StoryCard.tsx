@@ -55,7 +55,7 @@ export const StoryCard = ({ story, onUpdate, onDelete, isLocked = false }: Story
                                 href={story.jira_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-[10px] text-accent-primary hover:bg-accent-primary/20 transition-all ml-1"
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-primary/10 border border-accent-primary/20 text-[10px] text-accent-primary hover:bg-accent-primary/20 transition-all ml-1 whitespace-nowrap shrink-0"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <ExternalLink className="w-3 h-3" strokeWidth={2.5} />

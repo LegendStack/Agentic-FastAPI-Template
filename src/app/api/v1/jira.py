@@ -10,7 +10,18 @@ from ...core.config import settings
 router = APIRouter(prefix="/jira", tags=["jira"])
 
 logger = logging.getLogger(__name__)
-
+ 
+@router.get("/config")
+async def get_jira_config():
+    """
+    Get JIRA configuration for the frontend.
+    """
+    return {
+        "base_url": settings.JIRA_URL,
+        "auth_mode": settings.JIRA_AUTH_MODE,
+        "projects": settings.JIRA_PROJECTS
+    }
+ 
 @router.get("/projects/search")
 async def search_jira_projects(query: str = "") -> list[dict[str, Any]]:
     """
@@ -40,7 +51,8 @@ async def search_jira_projects(query: str = "") -> list[dict[str, Any]]:
                     "id": p.get("id"),
                     "name": p.get("name"),
                     "key": p.get("key"),
-                    "avatar": p.get("avatarUrls", {}).get("48x48")
+                    "avatar": p.get("avatarUrls", {}).get("48x48"),
+                    "url": f"{settings.JIRA_URL}/projects/{p.get('key')}"
                 }
                 for p in projects
             ]
@@ -70,7 +82,7 @@ async def universal_jira_search(query: str = "") -> list[dict[str, Any]]:
             response = await client.get(url, auth=auth, params=params, timeout=timeout)
             if response.status_code == 200:
                 vals = response.json().get("values", [])
-                return [{"id": p.get("id"), "key": p.get("key"), "name": p.get("name"), "type": "project"} for p in vals]
+                return [{"id": p.get("id"), "key": p.get("key"), "name": p.get("name"), "type": "project", "url": f"{settings.JIRA_URL}/projects/{p.get('key')}"} for p in vals]
             return []
 
     async def search_issues():
@@ -90,7 +102,8 @@ async def universal_jira_search(query: str = "") -> list[dict[str, Any]]:
                         "status": i.get("fields", {}).get("status", {}).get("name"),
                         "issuetype": i.get("fields", {}).get("issuetype", {}).get("name"),
                         "labels": i.get("fields", {}).get("labels", []),
-                        "type": i.get("fields", {}).get("issuetype", {}).get("name").lower()
+                        "type": i.get("fields", {}).get("issuetype", {}).get("name").lower(),
+                        "url": f"{settings.JIRA_URL}/browse/{i.get('key')}"
                     } for i in issues
                 ]
             return []
@@ -126,7 +139,8 @@ async def get_jira_projects() -> list[dict[str, Any]]:
                     "id": p.get("id"),
                     "name": p.get("name"),
                     "key": p.get("key"),
-                    "avatar": p.get("avatarUrls", {}).get("48x48")
+                    "avatar": p.get("avatarUrls", {}).get("48x48"),
+                    "url": f"{settings.JIRA_URL}/projects/{p.get('key')}"
                 }
                 for p in projects
             ]
@@ -175,7 +189,8 @@ async def get_jira_epics(project_key: str) -> list[dict[str, Any]]:
                     "key": i.get("key"),
                     "summary": i.get("fields", {}).get("summary"),
                     "status": i.get("fields", {}).get("status", {}).get("name"),
-                    "labels": i.get("fields", {}).get("labels", [])
+                    "labels": i.get("fields", {}).get("labels", []),
+                    "url": f"{settings.JIRA_URL}/browse/{i.get('key')}"
                 }
                 for i in issues
             ]
@@ -309,6 +324,7 @@ async def get_jira_epic_stories(project_key: str, epic_key: str) -> list[dict[st
                     "status": i.get("fields", {}).get("status", {}).get("name"),
                     "issuetype": i.get("fields", {}).get("issuetype", {}).get("name"),
                     "labels": i.get("fields", {}).get("labels", []),
+                    "url": f"{settings.JIRA_URL}/browse/{i.get('key')}"
                 }
                 for i in issues
             ]

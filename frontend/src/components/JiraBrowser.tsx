@@ -23,6 +23,7 @@ interface JiraBrowserProps {
     onDecomposeEpic: (epic: { key: string, summary: string }) => void;
     onImproveStory: (story: { key: string, summary: string }) => void;
     onClose: () => void;
+    jiraBaseUrl?: string | null;
 }
 
 interface JiraNode {
@@ -34,6 +35,7 @@ interface JiraNode {
     type: 'project' | 'epic' | 'story' | 'task' | 'issue';
     issuetype?: string;
     labels?: string[];
+    url?: string;
 }
 
 interface TreeNodeProps {
@@ -50,6 +52,7 @@ interface TreeNodeProps {
     onImproveStory: (story: { key: string; summary: string }) => void;
     isPinned?: boolean;
     onClear?: () => void;
+    jiraBaseUrl?: string | null;
 }
 
 const TreeNode = ({
@@ -65,7 +68,8 @@ const TreeNode = ({
     onDecomposeEpic,
     onImproveStory,
     isPinned,
-    onClear
+    onClear,
+    jiraBaseUrl
 }: TreeNodeProps) => {
     return (
         <div className="select-none">
@@ -155,7 +159,7 @@ const TreeNode = ({
                         </button>
                     )}
                     <a
-                        href={`https://jira.atlassian.net/browse/${node.key}`}
+                        href={node.url || (jiraBaseUrl ? (node.type === 'project' ? `${jiraBaseUrl}/projects/${node.key}` : `${jiraBaseUrl}/browse/${node.key}`) : `https://jira.atlassian.net/browse/${node.key}`)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -191,6 +195,7 @@ const TreeNode = ({
                                     onNodeToggle={onNodeToggle}
                                     onDecomposeEpic={onDecomposeEpic}
                                     onImproveStory={onImproveStory}
+                                    jiraBaseUrl={jiraBaseUrl}
                                 />
                             ))}
                         </div>
@@ -201,7 +206,7 @@ const TreeNode = ({
     );
 };
 
-export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBrowserProps) => {
+export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose, jiraBaseUrl }: JiraBrowserProps) => {
     const { selectedProject, selectedEpic, setProject, setSelectedEpic, clearContext } = useProjectContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -319,7 +324,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed top-0 bottom-0 left-0 w-85 bg-bg-secondary border-r border-border-primary shadow-2xl z-[100] flex flex-col glass"
         >
-            drum            {/* Header */}
+            {/* Header */}
             <div className="p-6 border-b border-border-primary flex items-center justify-between bg-bg-primary/50">
                 <div>
                     <h2 className="text-lg font-bold text-text-primary tracking-tight flex items-center gap-2">
@@ -387,6 +392,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
                                             onImproveStory={onImproveStory}
                                             isPinned
                                             onClear={() => setProject(null)}
+                                            jiraBaseUrl={jiraBaseUrl}
                                         />
                                     )}
                                     {selectedEpic && (
@@ -405,6 +411,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
                                             onImproveStory={onImproveStory}
                                             isPinned
                                             onClear={() => setSelectedEpic(null)}
+                                            jiraBaseUrl={jiraBaseUrl}
                                         />
                                     )}
                                 </div>
@@ -433,6 +440,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
                                             onNodeToggle={toggleNode}
                                             onDecomposeEpic={onDecomposeEpic}
                                             onImproveStory={onImproveStory}
+                                            jiraBaseUrl={jiraBaseUrl}
                                         />
                                     ))}
                                 </div>
@@ -472,6 +480,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
                                                 onNodeToggle={toggleNode}
                                                 onDecomposeEpic={onDecomposeEpic}
                                                 onImproveStory={onImproveStory}
+                                                jiraBaseUrl={jiraBaseUrl}
                                             />
                                         ))}
                                     </div>
@@ -491,6 +500,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
                                                 onNodeToggle={toggleNode}
                                                 onDecomposeEpic={onDecomposeEpic}
                                                 onImproveStory={onImproveStory}
+                                                jiraBaseUrl={jiraBaseUrl}
                                             />
                                         ))}
                                     </div>
@@ -510,6 +520,7 @@ export const JiraBrowser = ({ onDecomposeEpic, onImproveStory, onClose }: JiraBr
                                                 onNodeToggle={toggleNode}
                                                 onDecomposeEpic={onDecomposeEpic}
                                                 onImproveStory={onImproveStory}
+                                                jiraBaseUrl={jiraBaseUrl}
                                             />
                                         ))}
                                     </div>
