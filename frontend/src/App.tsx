@@ -74,6 +74,7 @@ const Dashboard = () => {
     const url = new URL(window.location.href);
     url.searchParams.delete('thread');
     window.history.pushState({}, '', url);
+    setSelectedEpic(null);
     reset();
   };
 
