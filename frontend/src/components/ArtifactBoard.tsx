@@ -53,7 +53,15 @@ export const ArtifactBoard = ({
                     </div>
                     <div>
                         <h3 className="font-bold text-text-primary leading-none flex items-center gap-2">
-                            Backlog Artifact
+                            {(() => {
+                                const type = targetIssueType?.toLowerCase();
+                                if (type === 'epic') return "Initiative Portfolio";
+                                if (type === 'story') return "Delivery Backlog";
+                                if (type === 'task') return "Engineering Plan";
+                                if (type === 'sub-task') return "Execution Details";
+                                if (type === 'requirement') return "System Spec";
+                                return "Backlog Manifest";
+                            })()}
                             {projectName && (
                                 <span className="ml-1 px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[8px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
                                     {jiraBaseUrl ? (
@@ -209,17 +217,26 @@ export const ArtifactBoard = ({
                             {isSavingToJira ? (
                                 <>
                                     <div className="w-3 h-3 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
-                                    Saving to JIRA...
+                                    Synchronizing...
                                 </>
                             ) : stories.every(s => s.jira_key) ? (
                                 <>
                                     <Check className="w-4 h-4" strokeWidth={2.5} />
-                                    All {displayType} Saved
+                                    All {displayType} Synced
                                 </>
                             ) : (
                                 <>
                                     <LayoutDashboard className="w-4 h-4" strokeWidth={2.5} />
-                                    Save {stories.filter(s => !s.jira_key).length} {displayType} to JIRA
+                                    {(() => {
+                                        const count = stories.filter(s => !s.jira_key).length;
+                                        const type = targetIssueType?.toLowerCase();
+                                        if (type === 'epic') return `Publish ${count} Epics to JIRA`;
+                                        if (type === 'story') return `Sync ${count} Stories to JIRA`;
+                                        if (type === 'task') return `Export ${count} Tasks to JIRA`;
+                                        if (type === 'sub-task') return `Push ${count} Details to JIRA`;
+                                        if (type === 'requirement') return `Scale ${count} Specs to JIRA`;
+                                        return `Sync ${count} ${displayType} to JIRA`;
+                                    })()}
                                 </>
                             )}
                         </button>

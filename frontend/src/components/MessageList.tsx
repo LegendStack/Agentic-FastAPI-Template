@@ -12,7 +12,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
     if (messages.length === 0) return null;
 
     const formatTokens = (val?: number) => {
-        if (!val) return '0';
+        if (!val || val <= 0) return null;
         if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
         return val.toString();
     };
@@ -33,7 +33,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
                         }`}>
                         <div className="relative">
                             {msg.role === 'assistant' ? (
-                                <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-p:text-text-primary/95 prose-a:text-accent-primary prose-a:no-underline hover:prose-a:underline prose-strong:text-accent-primary prose-ul:list-disc prose-ul:pl-4">
+                                <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-p:text-text-primary/95 prose-a:text-accent-primary prose-a:no-underline hover:prose-a:underline prose-strong:text-accent-primary prose-ul:list-disc prose-ul:pl-4 text-base">
                                     {msg.content.includes("Refinement complete") && (
                                         <div className="flex items-center gap-2 mb-3">
                                             <div className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/20 text-[10px] uppercase tracking-wider font-bold text-accent-primary inline-flex items-center gap-1.5">
@@ -45,7 +45,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
                                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                                 </div>
                             ) : (
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                <p className="text-base leading-relaxed whitespace-pre-wrap">
                                     {msg.content}
                                 </p>
                             )}
@@ -53,9 +53,11 @@ export const MessageList = ({ messages }: MessageListProps) => {
                             <div className={`absolute bottom-[-24px] flex items-center gap-4 ${msg.role === 'user' ? 'right-0' : 'left-0'}`}>
                                 <CopyButton content={msg.content} role={msg.role} />
 
-                                {msg.role === 'assistant' && (msg.input_tokens || msg.output_tokens) && (
+                                {msg.role === 'assistant' && ((msg.input_tokens ?? 0) > 0 || (msg.output_tokens ?? 0) > 0) && (
                                     <div className="text-[10px] text-text-tertiary font-mono tracking-tighter bg-bg-tertiary/30 px-2 py-0.5 rounded border border-border-primary/50">
-                                        {formatTokens(msg.input_tokens)} in • {formatTokens(msg.output_tokens)} out
+                                        {(msg.input_tokens ?? 0) > 0 && `${formatTokens(msg.input_tokens)} in`}
+                                        {(msg.input_tokens ?? 0) > 0 && (msg.output_tokens ?? 0) > 0 && ' • '}
+                                        {(msg.output_tokens ?? 0) > 0 && `${formatTokens(msg.output_tokens)} out`}
                                     </div>
                                 )}
                             </div>
@@ -86,14 +88,13 @@ const CopyButton = ({ content, role }: { content: string, role: string }) => {
     return (
         <button
             onClick={handleCopy}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all text-text-tertiary hover:text-accent-primary hold ${role === 'assistant'
+            className={`flex items-center justify-center p-1.5 rounded-lg transition-all text-text-tertiary hover:text-accent-primary hover:bg-bg-tertiary/50 border border-transparent hover:border-border-primary/50 ${role === 'assistant'
                 ? 'opacity-100'
                 : 'opacity-0 group-hover:opacity-100'
                 }`}
-            title="Copy to clipboard"
+            title={copied ? 'Copied!' : 'Copy to clipboard'}
         >
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            <span className="text-[9px] font-bold uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
+            {copied ? <Check className="w-3.5 h-3.5 text-accent-primary" /> : <Copy className="w-3.5 h-3.5" />}
         </button>
     );
 };

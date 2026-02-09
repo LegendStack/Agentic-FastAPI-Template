@@ -12,7 +12,7 @@ import { MessageList } from './components/MessageList';
 import { ArtifactBoard } from './components/ArtifactBoard';
 import { JiraBrowser } from './components/JiraBrowser';
 import { useBacklog } from './hooks/useBacklog';
-import { Search, LogOut, User, Sparkles, ChevronLeft, BarChart3, Layers } from 'lucide-react';
+import { Search, LogOut, User, Sparkles, ChevronLeft, BarChart3, Layers, Milestone, Layout, ListTodo, Cpu, FileSearch, Database } from 'lucide-react';
 import { ValueDashboard } from './components/ValueDashboard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, usePanelRef } from 'react-resizable-panels';
@@ -251,8 +251,17 @@ const Dashboard = () => {
               <header className="px-8 py-6 flex items-center justify-between border-b border-border-primary shrink-0">
                 <div className="flex flex-col gap-1">
                   <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-                    {targetLevel.charAt(0).toUpperCase() + targetLevel.slice(1)} Refinement
-                    <Sparkles className="w-4 h-4 text-accent-primary" />
+                    {(() => {
+                      const level = targetLevel?.toLowerCase();
+                      if (level === 'strategic') return <>Strategic Blueprinting <Milestone className="w-4 h-4 text-accent-primary" /></>;
+                      if (level === 'tactical') return <>Feature Architecture <Layout className="w-4 h-4 text-accent-primary" /></>;
+                      if (level === 'execution') return <>Story Refinement <ListTodo className="w-4 h-4 text-accent-primary" /></>;
+                      if (level === 'granular') return <>Technical Mapping <Cpu className="w-4 h-4 text-accent-primary" /></>;
+                      if (level === 'requirement') return <>Spec Translation <FileSearch className="w-4 h-4 text-accent-primary" /></>;
+                      if (level === 'refinement') return <>Precision Lab <Sparkles className="w-4 h-4 text-accent-primary" /></>;
+                      if (level === 'door_b') return <>External Synthesis <Database className="w-4 h-4 text-accent-primary" /></>;
+                      return <>Refinement Studio <Sparkles className="w-4 h-4 text-accent-primary" /></>;
+                    })()}
                     {selectedProject && (
                       <div className="flex items-center gap-1.5 ml-2">
                         <span className="px-2 py-0.5 rounded-md bg-accent-primary/10 border border-accent-primary/30 text-[10px] uppercase tracking-tighter text-accent-primary font-mono align-middle">
