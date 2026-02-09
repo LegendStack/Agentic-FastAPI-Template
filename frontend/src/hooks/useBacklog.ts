@@ -84,6 +84,7 @@ export const useBacklog = (initialThreadId?: string) => {
     const [isLocked, setIsLocked] = useState<boolean>(false);
     const [targetLevel, setTargetLevel] = useState<string>('story');
     const [targetIssueType, setTargetIssueType] = useState<string>('Story');
+    const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null);
     const { selectedProject, selectedEpic } = useProjectContext();
 
     // Load thread from URL on mount
@@ -251,6 +252,7 @@ export const useBacklog = (initialThreadId?: string) => {
 
     // Load an existing thread
     const loadThread = useCallback(async (threadId: string) => {
+        setLoadingThreadId(threadId);
         setCurrentThreadId(threadId);
         fetchVersions(threadId);
         try {
@@ -302,6 +304,8 @@ export const useBacklog = (initialThreadId?: string) => {
             console.error('Failed to load thread:', err);
             toast.error('Failed to load conversation history');
             throw err;
+        } finally {
+            setLoadingThreadId(null);
         }
     }, [fetchVersions]);
 
@@ -379,6 +383,7 @@ export const useBacklog = (initialThreadId?: string) => {
         loadVersion,
         recommendations,
         currentThreadId,
+        loadingThreadId,
         currentEpic,
         loadThread,
         updateStoryLocally,

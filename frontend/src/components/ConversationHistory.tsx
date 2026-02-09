@@ -26,6 +26,7 @@ interface ConversationHistoryProps {
     onSelectThread: (threadId: string) => void;
     onNewConversation: () => void;
     currentThreadId?: string;
+    loadingThreadId?: string | null;
     isMinimized?: boolean;
 }
 
@@ -74,6 +75,7 @@ export const ConversationHistory = ({
     onSelectThread,
     onNewConversation,
     currentThreadId,
+    loadingThreadId,
     isMinimized
 }: ConversationHistoryProps) => {
     const queryClient = useQueryClient();
@@ -224,12 +226,17 @@ export const ConversationHistory = ({
                                                             ) : (
                                                                 <>
                                                                     <div className="flex flex-col min-w-0 flex-1">
-                                                                        <p className={`text-xs font-semibold truncate mb-1.5 ${currentThreadId === conv.thread_id
-                                                                            ? 'text-accent-primary'
-                                                                            : 'text-text-primary'
-                                                                            }`}>
-                                                                            {conv.title || 'Untitled Chat'}
-                                                                        </p>
+                                                                        <div className="flex items-center justify-between mb-1.5 gap-2">
+                                                                            <p className={`text-xs font-semibold truncate ${currentThreadId === conv.thread_id
+                                                                                ? 'text-accent-primary'
+                                                                                : 'text-text-primary'
+                                                                                }`}>
+                                                                                {conv.title || 'Untitled Chat'}
+                                                                            </p>
+                                                                            {loadingThreadId === conv.thread_id && (
+                                                                                <div className="w-3 h-3 border-2 border-accent-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                                                                            )}
+                                                                        </div>
                                                                         <div className="flex items-center justify-between">
                                                                             <div className="flex items-center gap-2 min-w-0">
                                                                                 {conv.metadata?.project_key && (

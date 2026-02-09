@@ -47,6 +47,7 @@ const Dashboard = () => {
     sendMessage,
     updateStoryLocally,
     currentThreadId,
+    loadingThreadId,
     loadThread,
     recommendations,
     reset,
@@ -172,6 +173,7 @@ const Dashboard = () => {
             onSelectThread={handleSelectThread}
             onNewConversation={handleNewConversation}
             currentThreadId={currentThreadId}
+            loadingThreadId={loadingThreadId}
             isMinimized={isSidebarMinimized}
           />
         </div>
