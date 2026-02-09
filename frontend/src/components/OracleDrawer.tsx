@@ -149,13 +149,9 @@ export const OracleDrawer = ({
                         </button>
                     </div>
                 </div>
-                {!isMinimized && !isLocked && (
-                    <div className="px-4 pb-1 flex justify-between items-center text-[10px] text-text-tertiary font-medium uppercase tracking-widest">
-                        <div className="flex gap-4">
-                            <span><b>Enter</b> to send</span>
-                            <span><b>Shift + Enter</b> for new line</span>
-                        </div>
-                        {input.length > 0 && <span>{input.length} characters</span>}
+                {!isMinimized && !isLocked && input.length > 0 && (
+                    <div className="px-4 pb-1 flex justify-end items-center text-[10px] text-text-tertiary font-medium uppercase tracking-widest">
+                        <span>{input.length} characters</span>
                     </div>
                 )}
             </motion.form>
