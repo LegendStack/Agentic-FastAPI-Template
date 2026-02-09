@@ -106,28 +106,20 @@ export const ConversationHistory = ({
         }
     });
 
-    const restoreMutation = useMutation({
-        mutationFn: async (threadId: string) => {
-            await api.patch(`/agents/conversations/${threadId}`, { status: 'active' });
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['conversations', 'backlog_assistant'] });
-            toast.success('Conversation restored');
-        },
-        onError: () => {
-            toast.error('Failed to restore conversation');
-        }
-    });
+
 
     const deleteMutation = useMutation({
         mutationFn: async (threadId: string) => {
+            console.log("Delete mutation started for thread:", threadId);
             await api.delete(`/agents/conversations/${threadId}`);
         },
         onSuccess: () => {
+            console.log("Delete mutation success. Invalidating queries.");
             queryClient.invalidateQueries({ queryKey: ['conversations', 'backlog_assistant'] });
             toast.success('Conversation deleted');
         },
         onError: (err) => {
+            console.error("Delete mutation error:", err);
             toast.error('Failed to delete conversation');
             console.error('Delete failed:', err);
         }
@@ -149,7 +141,9 @@ export const ConversationHistory = ({
     };
 
     const handleDelete = (e: React.MouseEvent, threadId: string) => {
+        e.preventDefault();
         e.stopPropagation();
+        console.log("Delete button clicked for thread:", threadId);
         // Optimistic delete with Undo - no confirmation dialog needed
         deleteMutation.mutate(threadId);
     };
