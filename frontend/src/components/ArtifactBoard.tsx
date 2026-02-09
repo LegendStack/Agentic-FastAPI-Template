@@ -115,7 +115,7 @@ export const ArtifactBoard = ({
                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    className="absolute right-0 mt-2 w-64 glass border border-border-primary rounded-2xl shadow-2xl z-50 overflow-hidden"
+                                    className="absolute right-0 mt-2 w-64 bg-bg-secondary backdrop-blur-2xl border border-border-primary rounded-2xl shadow-2xl z-50 overflow-hidden"
                                 >
                                     <div className="p-2 flex flex-col gap-1 max-h-[300px] overflow-y-auto no-scrollbar">
                                         <button
