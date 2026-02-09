@@ -79,7 +79,7 @@ class MockDecomposeResult:
         return DecompositionResult(
             epic=epic,
             stories=stories,
-            conversation_title=f"Decomposition for {epic.title[:20]}",
+            conversation_title=f"{epic.title[:30]} Breakdown",
             summary=f"Decomposed '{epic.title}' into {len(stories)} user stories covering setup, core implementation, and testing.",
             recommendations=[
                 "Add BDD scenarios to all stories",

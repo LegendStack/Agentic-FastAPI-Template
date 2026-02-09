@@ -428,7 +428,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
 
             llm = get_llm_service()
 
-            prompt = f"""Generate a concise, professional title (3-5 words) for a JIRA epic decomposition task based on this user message.
+            prompt = f"""You are a JIRA expert. Generate a concise, professional title (3-5 words) for a conversation based on this user message.
             
             User Message: {message}
             
@@ -437,6 +437,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
             2. 3-5 words only
             3. No quotes, no prefix like "Title:", no period at the end
             4. Focus on the core business feature or project being described.
+            5. If the message is a short greeting or help request, make it descriptive (e.g., "General Backlog Assistance" or "System Capability Inquiry").
             
             Title:"""
 
@@ -561,7 +562,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                 elif is_first:
                     # If this is effectively a first message (even if thread existed)
                     title = await self._generate_smart_title(message)
-                    await conversation_service.update_conversation_title(thread_id, title)
+                    await conversation_service.update_conversation(thread_id, title=title)
 
                 # Store project_key in metadata if provided
                 if project_key:
@@ -592,6 +593,21 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
         current_result = final_state.get("current_result")
         if isinstance(current_result, dict):
             current_result = DecompositionResult.model_validate(current_result)
+
+        # Update title if decomposition result has a smart title (Phase 6 Polish)
+        if current_result and hasattr(current_result, "conversation_title") and current_result.conversation_title:
+            if hasattr(self.checkpointer, "db"):
+                from ..conversations import ConversationService
+                conversation_service = ConversationService(self.checkpointer.db)
+                # Only update if current title is still generic or very short
+                existing_conv = await conversation_service.get_conversation(thread_id)
+                if existing_conv:
+                    current_title = existing_conv.title or ""
+                    # If common placeholder or just a truncated version of a short greeting
+                    is_generic = current_title in ["New Conversation", "New Chat", "Conversation"]
+                    is_short = len(current_title) < 10
+                    if is_generic or is_short:
+                        await conversation_service.update_conversation(thread_id, title=current_result.conversation_title)
 
         response = {
             "thread_id": thread_id,
@@ -634,10 +650,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                 output_tokens=output_tokens,
             )
 
-            # Update title based on result summary if it's the first message
-            if not existing_state.get("stories"):
-                summary_title = current_result.summary.split("\n")[0][:50]
-                await conversation_service.update_conversation_title(thread_id, summary_title)
+
 
         # Audit Logging for Refinement (Phase 57)
         try:
@@ -725,7 +738,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
             state["user_id"] = user_id
 
         # Run save node
-        save_result = await self.save_node(state)
+        save_result = await self._nodes.export_node(state)
 
         if save_result.get("stories") and self.checkpointer:
             # Prepare updates

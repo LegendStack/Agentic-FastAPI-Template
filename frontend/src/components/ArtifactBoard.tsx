@@ -192,9 +192,9 @@ export const ArtifactBoard = ({
                         <button
                             onClick={saveToJira}
                             disabled={isSavingToJira || stories.every(s => s.jira_key) || isLocked}
-                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-[11px] transition-all active:scale-95 ${stories.every(s => s.jira_key) || isLocked
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default'
-                                : 'bg-teal-600 dark:bg-cyan-400 text-white dark:text-slate-900 hover:bg-teal-700 dark:hover:bg-cyan-300 shadow-[0_0_25px_rgba(13,148,136,0.25)] dark:shadow-[0_0_25px_rgba(100,255,218,0.25)] hover:shadow-teal-500/40 dark:hover:shadow-cyan-400/40 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+                            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-[11px] transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed ${stories.every(s => s.jira_key) || isLocked
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-teal-600 dark:bg-cyan-400 text-white dark:text-slate-900 hover:bg-teal-700 dark:hover:bg-cyan-300 shadow-[0_0_25px_rgba(13,148,136,0.25)] dark:shadow-[0_0_25px_rgba(100,255,218,0.25)] hover:shadow-teal-500/40 dark:hover:shadow-cyan-400/40 disabled:opacity-50'
                                 }`}
                         >
                             {isSavingToJira ? (
