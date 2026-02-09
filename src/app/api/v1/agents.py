@@ -303,12 +303,12 @@ async def get_messages(
 async def update_conversation(
     thread_id: str, request: UpdateConversationRequest, db: Annotated[AsyncSession, Depends(async_get_db)] = None
 ):
-    """Update conversation title."""
+    """Update conversation title or status."""
     service = ConversationService(db)
-    conversation = await service.update_conversation_title(thread_id, request.title)
+    conversation = await service.update_conversation(thread_id, title=request.title, status=request.status)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return {"status": "updated", "title": conversation.title}
+    return {"status": "updated", "title": conversation.title, "new_status": conversation.status}
 
 
 @router.delete("/agents/conversations/{thread_id}")

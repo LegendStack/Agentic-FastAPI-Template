@@ -287,6 +287,12 @@ async def chat_handler(
                 error=result["error"],
             )
 
+        # Save metadata (project_key) if available
+        if request.project_key:
+            from ...agents.conversations import ConversationService
+            conversation_service = ConversationService(db)
+            await conversation_service.update_metadata(result["thread_id"], {"project_key": request.project_key})
+
         from ...core.config import settings
 
         return DecomposeResponse(
@@ -356,6 +362,12 @@ async def decompose_epic(
         # Extract recommendations from full response
         full_response = result.get("response", {})
         recommendations = full_response.get("recommendations", []) if full_response else []
+
+        # Save metadata (project_key) if available
+        if project_key:
+            from ...agents.conversations import ConversationService
+            conversation_service = ConversationService(db)
+            await conversation_service.update_metadata(result["thread_id"], {"project_key": project_key})
 
         from ...core.config import settings
 

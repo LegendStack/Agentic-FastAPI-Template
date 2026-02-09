@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Pencil, Trash2, Check, X } from 'lucide-react';
+import { toast } from 'sonner';
 import api from '../api/client';
 import { useState } from 'react';
 
@@ -85,7 +86,12 @@ export const ConversationHistory = ({
             const response = await api.get('/agents/conversations', {
                 params: { agent_name: 'backlog_assistant', limit: 50 },
             });
-            return (response.data.conversations || []) as Conversation[];
+            const conversations = response.data.conversations || [];
+
+            return conversations.map((conv: any) => ({
+                ...conv,
+                metadata: typeof conv.metadata === 'string' ? JSON.parse(conv.metadata) : conv.metadata
+            })) as Conversation[];
         },
         refetchInterval: 30000,
     });
@@ -100,13 +106,66 @@ export const ConversationHistory = ({
         }
     });
 
+    const restoreMutation = useMutation({
+        mutationFn: async (threadId: string) => {
+            await api.patch(`/agents/conversations/${threadId}`, { status: 'active' });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['conversations', 'backlog_assistant'] });
+            toast.success('Conversation restored');
+        },
+        onError: () => {
+            toast.error('Failed to restore conversation');
+        }
+    });
+
     const deleteMutation = useMutation({
         mutationFn: async (threadId: string) => {
             await api.delete(`/agents/conversations/${threadId}`);
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['conversations'] });
-        }
+        onMutate: async (threadId) => {
+            // Cancel any outgoing refetches
+            await queryClient.cancelQueries({ queryKey: ['conversations', 'backlog_assistant'] });
+
+            // Snapshot the previous value
+            const previousConversations = queryClient.getQueryData<Conversation[]>(['conversations', 'backlog_assistant']);
+
+            // Optimistically update to the new value
+            if (previousConversations) {
+                queryClient.setQueryData<Conversation[]>(['conversations', 'backlog_assistant'], (old) =>
+                    old ? old.filter((c) => c.thread_id !== threadId) : []
+                );
+            }
+
+            // Return a context object with the snapshotted value
+            return { previousConversations };
+        },
+        onSuccess: (_, threadId, context) => {
+            toast.success('Conversation deleted', {
+                description: 'You can restore it if this was a mistake.',
+                action: {
+                    label: 'Undo',
+                    onClick: () => {
+                        restoreMutation.mutate(threadId);
+                        // Optimistically restore? Optional, but safer to let restoreMutation handle it
+                        // For now, let's just trigger the restore mutation
+                    }
+                },
+                duration: 5000,
+            });
+        },
+        onError: (err, newTodo, context) => {
+            // If the mutation fails, use the context returned from onMutate to roll back
+            if (context?.previousConversations) {
+                queryClient.setQueryData(['conversations', 'backlog_assistant'], context.previousConversations);
+            }
+            toast.error('Failed to delete conversation');
+            console.error('Delete failed:', err);
+        },
+        onSettled: () => {
+            // Always refetch after error or success:
+            queryClient.invalidateQueries({ queryKey: ['conversations', 'backlog_assistant'] });
+        },
     });
 
     const handleStartEdit = (e: React.MouseEvent, conv: Conversation) => {
@@ -126,9 +185,8 @@ export const ConversationHistory = ({
 
     const handleDelete = (e: React.MouseEvent, threadId: string) => {
         e.stopPropagation();
-        if (window.confirm('Are you sure you want to delete this conversation?')) {
-            deleteMutation.mutate(threadId);
-        }
+        // Optimistic delete with Undo - no confirmation dialog needed
+        deleteMutation.mutate(threadId);
     };
 
     const groupedData = data?.reduce((acc: GroupedConversations, conv) => {

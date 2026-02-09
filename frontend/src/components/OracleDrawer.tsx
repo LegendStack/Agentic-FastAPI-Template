@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Wand2, Sparkles, UploadCloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { RecommendationList } from './RecommendationList';
 
 interface OracleDrawerProps {
@@ -62,6 +63,7 @@ export const OracleDrawer = ({
                 }
             } catch (err) {
                 console.error("Import failed", err);
+                toast.error('Import failed', { description: 'Could not parse the selected file.' });
             }
             // Reset input
             if (fileInputRef.current) fileInputRef.current.value = '';

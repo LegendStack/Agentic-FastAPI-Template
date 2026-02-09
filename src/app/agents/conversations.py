@@ -83,12 +83,23 @@ class ConversationService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def update_conversation_title(self, thread_id: str, title: str) -> Conversation | None:
-        """Update conversation title."""
+    async def update_conversation(
+        self, thread_id: str, title: str | None = None, status: str | None = None
+    ) -> Conversation | None:
+        """Update conversation title or status."""
+        values = {"updated_at": datetime.utcnow()}
+        if title is not None:
+            values["title"] = title
+        if status is not None:
+            values["status"] = status
+
+        if len(values) == 1:  # Only updated_at
+            return await self.get_conversation(thread_id)
+
         await self.db.execute(
             update(Conversation)
             .where(Conversation.thread_id == thread_id)
-            .values(title=title, updated_at=datetime.utcnow())
+            .values(**values)
         )
         await self.db.commit()
         return await self.get_conversation(thread_id)

@@ -436,6 +436,8 @@ const AuthWrapper = () => {
   );
 };
 
+import { Toaster } from 'sonner';
+
 function App() {
   return (
     <MsalProvider instance={msalInstance}>
@@ -443,6 +445,7 @@ function App() {
         <ProjectProvider>
           <ThemeProvider>
             <AuthWrapper />
+            <Toaster position="top-right" richColors expand={true} />
           </ThemeProvider>
         </ProjectProvider>
       </QueryClientProvider>

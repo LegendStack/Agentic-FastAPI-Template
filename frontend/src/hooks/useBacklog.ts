@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import api from '../api/client';
 import { useProjectContext } from './useProjectContext';
 
@@ -91,6 +92,7 @@ export const useBacklog = (initialThreadId?: string) => {
                 }
             } catch (err) {
                 console.error("Failed to fetch Jira config", err);
+                // Silent fail for config is okay, usually just means not configured
             }
         };
         fetchJiraConfig();
@@ -121,6 +123,7 @@ export const useBacklog = (initialThreadId?: string) => {
             setVersions(response.data.versions);
         } catch (err) {
             console.error('Failed to fetch versions:', err);
+            toast.error('Failed to load version history');
         }
     }, []);
 
@@ -134,9 +137,11 @@ export const useBacklog = (initialThreadId?: string) => {
             });
             if (response.data.stories) {
                 setStories(response.data.stories);
+                toast.success('Version loaded');
             }
         } catch (err) {
             console.error('Failed to load version:', err);
+            toast.error('Failed to load selected version');
         }
     }, [currentThreadId]);
 
@@ -203,6 +208,20 @@ export const useBacklog = (initialThreadId?: string) => {
                 return response.data;
             } catch (err: any) {
                 console.error(`[BacklogHook] API Error: `, err.response?.data || err.message);
+                const errorMessage = err.response?.data?.detail || err.message || 'Operation failed';
+
+                // Add error message to chat
+                const errorMsg: Message = {
+                    id: `msg-err-${Date.now()}`,
+                    role: 'assistant',
+                    content: `Error: ${errorMessage}. Please try again.`,
+                    timestamp: Date.now()
+                };
+                setMessages(prev => [...prev, errorMsg]);
+
+                toast.error('Operation failed', {
+                    description: errorMessage
+                });
                 throw err;
             }
         },
@@ -271,6 +290,7 @@ export const useBacklog = (initialThreadId?: string) => {
             return response.data;
         } catch (err) {
             console.error('Failed to load thread:', err);
+            toast.error('Failed to load conversation history');
             throw err;
         }
     }, [fetchVersions]);
@@ -308,6 +328,12 @@ export const useBacklog = (initialThreadId?: string) => {
             if (threadId) {
                 loadThread(threadId);
             }
+            toast.success('Successfully exported to JIRA');
+        },
+        onError: (error: any) => {
+            toast.error('Failed to export to JIRA', {
+                description: error.response?.data?.detail || error.message
+            });
         }
     });
 
@@ -323,6 +349,14 @@ export const useBacklog = (initialThreadId?: string) => {
                 },
             });
             return response.data; // Returns { epic_description: "..." }
+        },
+        onSuccess: () => {
+            toast.success('Spec imported successfully');
+        },
+        onError: (error: any) => {
+            toast.error('Failed to import spec', {
+                description: error.response?.data?.detail || error.message
+            });
         }
     });
 
