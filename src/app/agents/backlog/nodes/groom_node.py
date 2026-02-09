@@ -128,29 +128,64 @@ class BacklogAnalyzer:
         return report
 
     def _find_duplicates(self, stories: list[UserStory]) -> list[DuplicatePair]:
-        """Find potentially duplicate stories using text similarity."""
+        """Find potentially duplicate stories using multiple similarity signals."""
         duplicates = []
+        # Lower threshold to catch more potential issues (better to flag than miss)
+        threshold = 0.60 
 
         for i, story1 in enumerate(stories):
             for story2 in stories[i + 1 :]:
-                # Compare titles
-                title_similarity = SequenceMatcher(None, story1.title.lower(), story2.title.lower()).ratio()
+                # 1. Title Sequence Similarity (Order matters)
+                title_seq = SequenceMatcher(None, story1.title.lower(), story2.title.lower()).ratio()
 
-                # Compare descriptions
-                desc_similarity = SequenceMatcher(
+                # 2. Title Jaccard Similarity (Token overlap, order doesn't matter)
+                s1_tokens = set(story1.title.lower().split())
+                s2_tokens = set(story2.title.lower().split())
+                intersection = len(s1_tokens.intersection(s2_tokens))
+                union = len(s1_tokens.union(s2_tokens))
+                title_jaccard = intersection / union if union else 0.0
+
+                # 3. Description Sequence Similarity
+                desc_seq = SequenceMatcher(
                     None, (story1.description or "").lower(), (story2.description or "").lower()
                 ).ratio()
 
-                # Weighted average
-                overall_similarity = (title_similarity * 0.4) + (desc_similarity * 0.6)
+                # Take the strongest signal, but dampen if description is totally different
+                # If titles are identical (1.0), it's a dupe.
+                # If descriptions are identical (1.0), it's a dupe.
+                # If somewhat similar in both, it's a dupe.
+                
+                # We use a weighted mix, but allow strong individual signals to boost it
+                max_title = max(title_seq, title_jaccard)
+                
+                # Logic: If titles are very similar (>0.8), or desc is very similar (>0.8), or both are moderately similar
+                is_duplicate = False
+                reason = ""
+                score = 0.0
 
-                if overall_similarity >= self.similarity_threshold:
+                if max_title > 0.8:
+                    is_duplicate = True
+                    score = max_title
+                    reason = f"Titles are very similar ({int(score*100)}%)"
+                elif desc_seq > 0.85: # Higher threshold for description as they can be boilerplate
+                    is_duplicate = True
+                    score = desc_seq
+                    reason = f"Descriptions are very similar ({int(score*100)}%)"
+                else:
+                    # Combined score
+                    combined = (max_title * 0.5) + (desc_seq * 0.5)
+                    if combined > threshold:
+                        is_duplicate = True
+                        score = combined
+                        reason = f"Combined similarity detected ({int(score*100)}%)"
+
+                if is_duplicate:
                     duplicates.append(
                         DuplicatePair(
                             story_id_1=story1.id,
                             story_id_2=story2.id,
-                            similarity_score=round(overall_similarity, 2),
-                            reason=f"High similarity detected: {int(overall_similarity * 100)}% match",
+                            similarity_score=round(score, 2),
+                            reason=reason,
                         )
                     )
 
