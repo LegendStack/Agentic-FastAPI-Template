@@ -90,7 +90,7 @@ export const OracleDrawer = ({
             >
                 <div className="flex gap-3 items-end">
                     <div className="flex-1 relative">
-                        <Sparkles className={`absolute left-4 top-5 w-5 h-5 ${isProcessing || isImporting ? 'text-accent-primary animate-spin' : 'text-text-secondary'}`} />
+                        <Sparkles className={`absolute left-4 top-5 w-5 h-5 ${isProcessing || isImporting ? 'text-accent-primary' : 'text-text-secondary'}`} />
                         <textarea
                             rows={3}
                             value={input}
@@ -143,7 +143,7 @@ export const OracleDrawer = ({
                             className="p-3 bg-teal-600 dark:bg-cyan-400 text-white dark:text-slate-900 font-bold rounded-xl hover:bg-teal-700 dark:hover:bg-cyan-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center group shadow-[0_0_20px_rgba(13,148,136,0.2)] dark:shadow-[0_0_20px_rgba(100,255,218,0.2)] hover:shadow-teal-500/40 dark:hover:shadow-cyan-400/40 shrink-0 flex-1 active:scale-95"
                         >
                             <Wand2
-                                className={`w-5 h-5 ${isProcessing ? 'animate-spin' : 'group-hover:rotate-12'} transition-transform`}
+                                className={`w-5 h-5 ${isProcessing ? '' : 'group-hover:rotate-12'} transition-transform`}
                                 strokeWidth={2.5}
                             />
                         </button>

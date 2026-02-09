@@ -203,6 +203,7 @@ class DecomposeNode:
                 "current_result": result,
                 "usage_metadata": usage,
                 "target_issue_type": target_issue_type,
+                "target_level": target_level,
                 "is_first_message": False,
                 "error": None,
             }

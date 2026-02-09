@@ -183,6 +183,7 @@ export const ArtifactBoard = ({
                                     onUpdate={onUpdateStory}
                                     onDelete={onDeleteStory}
                                     isLocked={isLocked}
+                                    issueType={targetIssueType}
                                 />
                             ))}
                         </motion.div>

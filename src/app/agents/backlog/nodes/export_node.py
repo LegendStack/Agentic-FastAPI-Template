@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from ....core.config import settings
-from ....core.db.database import async_get_db
+from ....core.db.database import async_get_db, local_session
 from ...azure_openai import get_llm_service
 from ...vector_stores import VectorStoreFactory
 from ..config import BacklogAgentConfig
@@ -69,6 +69,13 @@ class ExportNode:
     def _has_jira_service(self) -> bool:
         """Check if JiraService is available for use."""
         return self._jira_service is not None
+
+    def _get_labels(self, story_or_epic: UserStory | Epic) -> list[str]:
+        """Combine and de-duplicate tags/labels, ensuring 'ai' is present."""
+        tags = getattr(story_or_epic, "tags", []) or []
+        default_tags = self.config.DEFAULT_TAGS or []
+        all_labels = set(tags + default_tags + ["ai"])
+        return sorted(list(all_labels))
 
     async def _create_epic_via_service(
         self,
@@ -277,7 +284,13 @@ class ExportNode:
         base_url = settings.JIRA_URL
         created_issues = []
         errors = []
+        # Robust Parent Key Handling: Only use parent_epic_id if it looks like a real JIRA key
+        # (contains a hyphen and isn't just a generated internal ID like EPIC-001)
         current_parent_epic_id = state.get("parent_epic_id")
+        if current_parent_epic_id and "-" not in current_parent_epic_id:
+            logger.warning(f"ExportNode: Ignoring invalid parent_epic_id: {current_parent_epic_id}")
+            current_parent_epic_id = None
+
 
         # 1. Handle Epic creation/update
         if current_parent_epic_id:
@@ -285,11 +298,13 @@ class ExportNode:
             if result.epic:
                 try:
                     logger.info(f"ExportNode: Updating existing Epic {current_parent_epic_id} via service")
+                    epic_data = result.epic.to_jira_format()
                     update_result = await self._jira_service.update_issue(
                         current_parent_epic_id,
                         {
-                            "summary": result.epic.title,
-                            "description": result.epic.description,
+                            "summary": epic_data["summary"],
+                            "description": epic_data["description"],
+                            "labels": self._get_labels(result.epic),
                         },
                     )
                     if update_result.is_error:
@@ -302,11 +317,12 @@ class ExportNode:
             # Create new Epic
             try:
                 logger.info(f"ExportNode: Creating new Epic '{result.epic.title}' via service")
+                epic_data = result.epic.to_jira_format()
                 payload = CreateEpicPayload(
                     project_key=project_key,
-                    summary=result.epic.title,
-                    description=result.epic.description or "",
-                    labels=(self.config.DEFAULT_TAGS or []) + ["ai"],
+                    summary=epic_data["summary"],
+                    description=epic_data["description"],
+                    labels=self._get_labels(result.epic),
                 )
                 epic_result = await self._jira_service.create_epic(payload)
 
@@ -358,8 +374,15 @@ class ExportNode:
                         description_parts.append(f"* {ec}")
                     description_parts.append("")
 
+                if story.test_scenarios:
+                    description_parts.append("h3. QA Scenarios")
+                    for scenario in story.test_scenarios:
+                        clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
+                        description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
+                    description_parts.append("")
+
                 full_description = "\n".join(description_parts).strip()
-                labels = (story.tags or []) + (self.config.DEFAULT_TAGS or []) + ["ai"]
+                labels = self._get_labels(story)
 
                 if story.jira_key:
                     # Update existing issue
@@ -396,7 +419,7 @@ class ExportNode:
                         summary=story.title,
                         description=full_description,
                         issue_type=state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE,
-                        parent_key=current_parent_epic_id,
+                        parent_key=current_parent_epic_id if (state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE) != self.config.JIRA_EPIC_ISSUE_TYPE else None,
                         labels=labels,
                     )
 
@@ -628,7 +651,9 @@ class ExportNode:
                 elif any(i.get("status") == "updated" for i in issues):
                     action = "JIRA_SYNC"
 
-            async with async_get_db() as db:
+            # Fix Audit Logging: Use local_session directly as it is an async context manager
+            # async_get_db is a generator and doesn't support 'async with' protocol directly
+            async with local_session() as db:
                 audit_service = AuditService(db)
                 await audit_service.log_event(
                     action=action,
@@ -656,7 +681,7 @@ class ExportNode:
             "issuetype": {"name": self.config.JIRA_EPIC_ISSUE_TYPE},
             "summary": epic.title,
             "description": epic.description,
-            "labels": (self.config.DEFAULT_TAGS or []) + ["ai"],
+            "labels": self._get_labels(epic),
         }
 
         # Strategy 1: Try with Epic Name (Classic/Company-managed)
@@ -704,7 +729,7 @@ class ExportNode:
             "project": {"key": project_key},
             "issuetype": {"name": target_issue_type or self.config.JIRA_ISSUE_TYPE},
             "summary": story.title,
-            "labels": (story.tags or []) + (self.config.DEFAULT_TAGS or []) + ["ai"],
+            "labels": self._get_labels(story),
         }
 
         # Build description based on what's NOT mapped to custom fields
@@ -730,11 +755,18 @@ class ExportNode:
                 description_parts.append(tech_notes_text)
                 description_parts.append("")
 
-        # Edge Cases (Always in description for now)
         if story.edge_cases:
             description_parts.append("h3. Edge Cases")
             for ec in story.edge_cases:
                 description_parts.append(f"* {ec}")
+            description_parts.append("")
+
+        # QA Scenarios
+        if story.test_scenarios:
+            description_parts.append("h3. QA Scenarios")
+            for scenario in story.test_scenarios:
+                clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
+                description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
             description_parts.append("")
 
         fields["description"] = "\n".join(description_parts).strip()
@@ -764,7 +796,8 @@ class ExportNode:
 
         # Prepare payload for Strategy 1
         payload = {"fields": fields.copy()}
-        if parent_epic_id:
+        # Hierarchy Guard: Skip linking if we are creating an Epic (classic)
+        if parent_epic_id and (target_issue_type or self.config.JIRA_ISSUE_TYPE) != self.config.JIRA_EPIC_ISSUE_TYPE:
             payload["fields"][self.config.JIRA_EPIC_LINK_FIELD] = parent_epic_id
 
         # LOG PAYLOAD FOR DEBUGGING
@@ -791,7 +824,9 @@ class ExportNode:
                 if self.config.JIRA_EPIC_LINK_FIELD in payload["fields"]:
                     del payload["fields"][self.config.JIRA_EPIC_LINK_FIELD]
 
-                payload["fields"]["parent"] = {"key": parent_epic_id}
+                # Hierarchy Guard: Skip linking if we are creating an Epic (Next-gen)
+                if (target_issue_type or self.config.JIRA_ISSUE_TYPE) != self.config.JIRA_EPIC_ISSUE_TYPE:
+                    payload["fields"]["parent"] = {"key": parent_epic_id}
 
                 logger.info(f"JIRA Payload (Attempt 2 - Parent Link): {payload}")
                 response = await client.post(
@@ -827,7 +862,7 @@ class ExportNode:
 
         fields = {
             "summary": story_or_epic.title,
-            "labels": (getattr(story_or_epic, "tags", []) or []) + (self.config.DEFAULT_TAGS or []) + ["ai"],
+            "labels": self._get_labels(story_or_epic),
         }
 
         # Build description
@@ -858,6 +893,14 @@ class ExportNode:
                     description_parts.append("h3. Technical Notes")
                     description_parts.append(tech_notes_text)
                     description_parts.append("")
+
+            # QA Scenarios
+            if hasattr(story_or_epic, "test_scenarios") and story_or_epic.test_scenarios:
+                description_parts.append("h3. QA Scenarios")
+                for scenario in story_or_epic.test_scenarios:
+                    clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
+                    description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
+                description_parts.append("")
 
             description = "\n".join(description_parts).strip()
 

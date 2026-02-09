@@ -779,9 +779,26 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                     if not epic_issue and epic_key:
                         epic_issue = next((i for i in issues if i.get("jira_key") == epic_key), None)
 
-                    story_issues = [i for i in issues if i != epic_issue]
+                    error_issues = export_result.get("errors", [])
+                    
+                    # Filter out the Epic itself from the stories list for the summary
+                    story_issues = [i for i in issues if i.get("internal_id") != "EPIC" and i.get("jira_key") != epic_key]
 
-                    links_text = "🚀 **JIRA issues saved successfully!**\n\n"
+                    # Dynamic Phrasing (Phase 51 Fix)
+                    target_issue_type = state.get("target_issue_type") or "Story"
+                    if target_issue_type == "Epic":
+                        items_label = "Epics"
+                    elif target_issue_type == "Task":
+                        items_label = "Tasks"
+                    elif target_issue_type == "Sub-task":
+                        items_label = "Sub-tasks"
+                    else:
+                        items_label = "User Stories"
+
+                    if not story_issues and error_issues:
+                         links_text = "⚠️ **JIRA export completed with errors.**\n\n"
+                    else:
+                         links_text = "🚀 **JIRA issues saved successfully!**\n\n"
 
                     if epic_key:
                         if epic_issue:
@@ -802,12 +819,19 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                                 f"- [{epic_key}]({base_url}/browse/{epic_key}){f' - {summary}' if summary else ''}\n\n"
                             )
 
-                        links_text += "**User Stories Decomposed:**\n"
+                        links_text += f"**{items_label} Decomposed:**\n"
                     else:
-                        links_text += "**User Stories Created:**\n"
+                        links_text += f"**{items_label} Created:**\n"
 
                     for issue in story_issues:
                         links_text += f"- [{issue['jira_key']}]({issue['url']}) - {issue.get('summary', '')}\n"
+
+                    if error_issues:
+                        links_text += f"\n❌ **Errors Encountered ({len(error_issues)}):**\n"
+                        for error in error_issues:
+                            item_id = error.get("story_id", "Unknown")
+                            error_msg = error.get("error", "Unknown error")
+                            links_text += f"- **{item_id}**: {error_msg}\n"
 
                     try:
                         await conversation_service.add_message(

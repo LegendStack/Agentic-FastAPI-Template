@@ -80,7 +80,7 @@ class UserStory(BaseModel):
     )
     acceptance_criteria: list[AcceptanceCriteria] = Field(
         default_factory=list,
-        description="Testable acceptance criteria",
+        description="Functional requirements defining the 'Definition of Done'.",
     )
     edge_cases: list[str] = Field(
         default_factory=list,
@@ -96,7 +96,7 @@ class UserStory(BaseModel):
     )
     test_scenarios: list[str] = Field(
         default_factory=list,
-        description="Automated Gherkin test scenarios (Given/When/Then)",
+        description="Detailed Gherkin scripts for QA/Automation. Optional: use only for complex technical validation or scenarios not covered by ACs.",
     )
     estimated_complexity: Literal["XS", "S", "M", "L", "XL"] | None = Field(
         None,
@@ -195,6 +195,14 @@ class UserStory(BaseModel):
             for note in self.technical_notes:
                 description_parts.append(f"* {note}")
 
+        if self.test_scenarios:
+            description_parts.append("")
+            description_parts.append("h3. QA Scenarios")
+            for scenario in self.test_scenarios:
+                # Wrap in code block for better Jira formatting
+                clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
+                description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
+
         return {
             "summary": self.title,
             "description": "\n".join(description_parts),
@@ -234,6 +242,47 @@ class Epic(BaseModel):
         default_factory=list,
         description="Key stakeholders for this epic",
     )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="Categorization tags for the initiative",
+    )
+    test_scenarios: list[str] = Field(
+        default_factory=list,
+        description="High-level Business Success Scenarios (Gherkin). Focus on E2E journeys and SIT/BAT validation.",
+    )
+
+    def to_jira_format(self) -> dict:
+        """Format epic for JIRA export."""
+        description_parts = [self.description]
+
+        if self.context:
+            description_parts.append("")
+            description_parts.append("h3. Context")
+            description_parts.append(self.context)
+
+        if self.business_value:
+            description_parts.append("")
+            description_parts.append("h3. Business Value")
+            description_parts.append(self.business_value)
+
+        if self.stakeholders:
+            description_parts.append("")
+            description_parts.append("h3. Stakeholders")
+            for stakeholder in self.stakeholders:
+                description_parts.append(f"* {stakeholder}")
+
+        if self.test_scenarios:
+            description_parts.append("")
+            description_parts.append("h3. Business Success Scenarios (SIT/BAT)")
+            for scenario in self.test_scenarios:
+                clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
+                description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
+
+        return {
+            "summary": self.title,
+            "description": "\n".join(description_parts).strip(),
+            "labels": self.tags,
+        }
 
 
 class DecompositionResult(BaseModel):

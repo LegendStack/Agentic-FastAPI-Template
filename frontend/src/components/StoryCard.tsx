@@ -20,9 +20,10 @@ interface StoryCardProps {
     onUpdate: (story: UserStory) => void;
     onDelete: (id: string) => void;
     isLocked?: boolean;
+    issueType?: string;
 }
 
-export const StoryCard = ({ story, onUpdate, onDelete, isLocked = false }: StoryCardProps) => {
+export const StoryCard = ({ story, onUpdate, onDelete, isLocked = false, issueType = 'Story' }: StoryCardProps) => {
     const [copied, setCopied] = useState(false);
     const isActuallyLocked = isLocked || !!story.jira_key;
 
@@ -49,6 +50,18 @@ export const StoryCard = ({ story, onUpdate, onDelete, isLocked = false }: Story
                 </div>
                 <div className="flex-1">
                     <div className="flex items-baseline gap-2 mb-1">
+                        {/* Issue Type Badge */}
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border transition-all ${issueType.toLowerCase() === 'epic'
+                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                : issueType.toLowerCase() === 'task'
+                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                    : issueType.toLowerCase() === 'sub-task'
+                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                        : 'bg-accent-primary/10 text-accent-primary border-accent-primary/20'
+                            }`}>
+                            {issueType}
+                        </span>
+
                         {!isActuallyLocked && <span className="text-xs font-mono text-accent-primary uppercase tracking-tighter whitespace-nowrap shrink-0">{story.id}</span>}
                         {story.jira_key && (
                             <a
@@ -231,16 +244,18 @@ export const StoryCard = ({ story, onUpdate, onDelete, isLocked = false }: Story
                             className="mt-3 pl-2 space-y-3 border-l-2 border-border-primary/50 ml-1.5"
                         >
                             {story.test_scenarios.map((scenario, idx) => (
-                                <div key={idx} className="bg-bg-tertiary/20 p-3 rounded-lg border border-border-primary/30">
-                                    <div className="flex gap-2 mb-1">
-                                        <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                                        <h5 className="font-mono text-[10px] text-purple-300 opacity-80 uppercase tracking-widest">Scenario {idx + 1}</h5>
+                                <div key={idx} className="bg-bg-primary/20 p-2 rounded-lg border border-border-primary/20">
+                                    <div className="flex items-center justify-between mb-1.5 px-1">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1 h-1 rounded-full bg-accent-primary/50 shrink-0" />
+                                            <h5 className="font-mono text-[9px] text-text-tertiary uppercase tracking-widest">Scenario {idx + 1}</h5>
+                                        </div>
+                                        <span className="text-[8px] font-mono text-accent-primary/40 uppercase">Gherkin Script</span>
                                     </div>
-                                    <div className="mt-2 group/scenario relative">
-                                        <pre className="bg-bg-primary/40 border border-border-primary/30 p-4 rounded-xl overflow-x-auto shadow-inner">
+                                    <div className="group/code relative">
+                                        <pre className="bg-bg-tertiary/20 border border-border-primary/10 p-3 rounded-md overflow-x-auto">
                                             <code
-                                                className="language-gherkin text-[11px] font-mono tracking-tight text-purple-300 block leading-relaxed"
-                                                style={{ textShadow: '0 0 10px rgba(168, 85, 247, 0.2)' }}
+                                                className="language-gherkin text-[10px] font-mono tracking-tight text-accent-primary/70 block leading-tight"
                                             >
                                                 {scenario.replace(/```(gherkin)?/gi, '').replace(/```/g, '').trim()}
                                             </code>

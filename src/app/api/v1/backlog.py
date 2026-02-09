@@ -659,6 +659,8 @@ async def export_to_jira(
         raise HTTPException(status_code=400, detail=result["error"])
 
     export_result = result.get("export_result", {})
+    if export_result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=export_result.get("message", "Export failed"))
 
     return ExportResponse(
         thread_id=thread_id,
