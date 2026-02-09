@@ -56,7 +56,9 @@ const Dashboard = () => {
     currentEpic,
     importSpec,
     isImporting,
-    isLocked
+    isLocked,
+    targetLevel,
+    targetIssueType
   } = useBacklog();
 
   const handleSelectThread = async (threadId: string) => {
@@ -247,7 +249,7 @@ const Dashboard = () => {
               <header className="px-8 py-6 flex items-center justify-between border-b border-border-primary shrink-0">
                 <div className="flex flex-col gap-1">
                   <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-                    Refinement
+                    {targetLevel.charAt(0).toUpperCase() + targetLevel.slice(1)} Refinement
                     <Sparkles className="w-4 h-4 text-accent-primary" />
                     {selectedProject && (
                       <div className="flex items-center gap-1.5 ml-2">
@@ -381,6 +383,7 @@ const Dashboard = () => {
                   isSavingToJira={isSavingToJira}
                   onCollapse={() => artifactPanelRef.current?.collapse()}
                   isLocked={isLocked}
+                  targetIssueType={targetIssueType}
                 />
               </div>
             </Panel>

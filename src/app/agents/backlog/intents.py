@@ -17,7 +17,19 @@ class UserIntent(str, Enum):
     """
 
     DECOMPOSE = "decompose"
-    """Break down an epic, feature, or requirement into user stories."""
+    """Generic decomposition (default to stories)."""
+
+    DECOMPOSE_TO_EPICS = "decompose_to_epics"
+    """Decompose a high-level requirement or document into multiple epics."""
+
+    DECOMPOSE_TO_STORIES = "decompose_to_stories"
+    """Decompose an epic or feature into multiple user stories (with parent linking)."""
+
+    DECOMPOSE_TO_TASKS = "decompose_to_tasks"
+    """Decompose a user story into technical implementation tasks."""
+
+    DECOMPOSE_TO_SUBTASKS = "decompose_to_subtasks"
+    """Decompose a task into granular sub-tasks."""
 
     REFINE = "refine"
     """Improve, modify, or enhance existing stories in the backlog."""
@@ -44,8 +56,23 @@ class UserIntent(str, Enum):
 # Descriptions used for zero-shot classification prompts
 INTENT_DESCRIPTIONS: dict[UserIntent, str] = {
     UserIntent.DECOMPOSE: (
-        "User wants to break down an epic, feature, or requirement into user stories. "
-        "They are providing new content to be decomposed, not asking about existing stories."
+        "User wants to break down a requirement into smaller items. Defaults to user stories if level not specified."
+    ),
+    UserIntent.DECOMPOSE_TO_EPICS: (
+        "User wants to decompose a high-level requirements document or charter into multiple Epics. "
+        "Keywords: 'into epics', 'list of epics', 'breakdown into epics'."
+    ),
+    UserIntent.DECOMPOSE_TO_STORIES: (
+        "User wants to decompose an Epic into User Stories. "
+        "Keywords: 'into stories', 'user stories for', 'breakdown this epic'."
+    ),
+    UserIntent.DECOMPOSE_TO_TASKS: (
+        "User wants to decompose a User Story into technical tasks. "
+        "Keywords: 'into tasks', 'technical tasks', 'breakdown this story'."
+    ),
+    UserIntent.DECOMPOSE_TO_SUBTASKS: (
+        "User wants to decompose a Task into Sub-tasks. "
+        "Keywords: 'into sub-tasks', 'subtasks', 'breakdown this task'."
     ),
     UserIntent.REFINE: (
         "User wants to improve, modify, add details to, or enhance ALL existing user stories. "
@@ -89,7 +116,12 @@ Your task is to analyze the user's message and classify their intent into ONE of
 {intent_list}
 
 ## Rules:
-1. If the user provides substantial content (epic description, feature request, requirements), classify as "decompose"
+1. If the user provides substantial content to be broken down, classify as the most appropriate "decompose_to_*" intent. 
+   - Use "decompose_to_epics" for high-level docs/charters.
+   - Use "decompose_to_stories" for specific features or epics.
+   - Use "decompose_to_tasks" for specific user stories.
+   - Use "decompose_to_subtasks" for specific tasks.
+   - Fallback to "decompose" if ambiguous.
 2. If the user references existing stories and wants changes, classify as "refine"
 3. If the user asks questions, greetings, or seeks help, classify as "help"
 4. If the user wants to simply view or identify a specific story or entity, classify as "view"

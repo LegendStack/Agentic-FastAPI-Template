@@ -75,6 +75,7 @@ class BacklogAgentState(BaseAgentState):
 
     # Intent Classification (Phase 1)
     detected_intent: str | None
+    target_issue_type: str | None  # Requested issue type for export (Story, Task, etc.)
 
     # Help/Q&A (Phase 2)
     help_response: str | None

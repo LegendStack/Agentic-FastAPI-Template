@@ -395,7 +395,7 @@ class ExportNode:
                         project_key=project_key,
                         summary=story.title,
                         description=full_description,
-                        issue_type=self.config.JIRA_ISSUE_TYPE,
+                        issue_type=state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE,
                         parent_key=current_parent_epic_id,
                         labels=labels,
                     )
@@ -700,7 +700,7 @@ class ExportNode:
         # Start with standard fields
         fields = {
             "project": {"key": project_key},
-            "issuetype": {"name": self.config.JIRA_ISSUE_TYPE},
+            "issuetype": {"name": state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE},
             "summary": story.title,
             "labels": (story.tags or []) + (self.config.DEFAULT_TAGS or []) + ["ai"],
         }

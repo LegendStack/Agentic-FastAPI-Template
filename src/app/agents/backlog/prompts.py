@@ -10,7 +10,7 @@ from ..prompts import PromptRegistry
 # === System Prompts ===
 
 DECOMPOSE_SYSTEM_PROMPT = """You are an expert Agile Product Owner and Business Analyst.
-Your role is to decompose high-level epics and features into well-structured user stories for the project: {project_context}.
+Your role is to decompose requirements into well-structured items at the requested level: {target_level_instruction} for the project: {project_context}.
 
 ## Your Expertise
 - Breaking down complex requirements into atomic, deliverable stories
@@ -114,6 +114,25 @@ Skip the "As a user..." format in favor of direct, concise language.
 """,
 }
 
+TARGET_LEVEL_INSTRUCTIONS = {
+    "epic": """DECOMPOSING TO EPICS:
+- Create high-level Epics that represent major feature areas or business capabilities.
+- Each Epic should have a clear title and a broad description of scope.
+- Acceptance criteria should define the 'Definition of Done' for the entire feature area.""",
+    "story": """DECOMPOSING TO USER STORIES:
+- Use standard user story format unless otherwise specified.
+- Each story should be a vertical slice of functionality.
+- Acceptance criteria should be specific and testable.""",
+    "task": """DECOMPOSING TO TECHNICAL TASKS:
+- Break down stories into specific technical implementation tasks.
+- Focus on 'How' to implement: API changes, DB schema updates, UI components, etc.
+- Acceptance criteria should be technical verification steps.""",
+    "subtask": """DECOMPOSING TO SUB-TASKS:
+- Create granular, micro-level tasks (usually < 4 hours).
+- Very specific actions: 'Update XYZ function signature', 'Add unit test for ABC'.
+- Simple, direct descriptions.""",
+}
+
 AC_STYLE_INSTRUCTIONS = {
     "bullet": """Write acceptance criteria as clear bullet points:
 - User can see the login button
@@ -130,9 +149,9 @@ AC_STYLE_INSTRUCTIONS = {
 
 # === User Prompt Templates ===
 
-DECOMPOSE_USER_PROMPT = """Please decompose the following epic into user stories:
+DECOMPOSE_USER_PROMPT = """Please decompose the following input into {target_level}s:
 
-## Epic
+## Input Content
 {epic_description}
 
 {context_section}
@@ -153,6 +172,7 @@ Respond with the complete updated DecompositionResult."""
 
 
 def get_decompose_system_prompt(
+    target_level: str = "story",
     story_template: str = "standard",
     ac_style: str = "bullet",
     project_key: str | None = None,
@@ -161,6 +181,7 @@ def get_decompose_system_prompt(
     project_context = f"Project {project_key}" if project_key else "General Project"
     return DECOMPOSE_SYSTEM_PROMPT.format(
         project_context=project_context,
+        target_level_instruction=TARGET_LEVEL_INSTRUCTIONS.get(target_level, TARGET_LEVEL_INSTRUCTIONS["story"]),
         story_template_instructions=STORY_TEMPLATE_INSTRUCTIONS.get(
             story_template, STORY_TEMPLATE_INSTRUCTIONS["standard"]
         ),
@@ -170,6 +191,7 @@ def get_decompose_system_prompt(
 
 def get_decompose_user_prompt(
     epic_description: str,
+    target_level: str = "story",
     context: str | None = None,
     min_stories: int = 2,
     max_stories: int = 10,
@@ -194,6 +216,7 @@ def get_decompose_user_prompt(
 
     return DECOMPOSE_USER_PROMPT.format(
         epic_description=epic_description,
+        target_level=target_level,
         context_section=context_section,
         min_stories=min_stories,
         max_stories=max_stories,

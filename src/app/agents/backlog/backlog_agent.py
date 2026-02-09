@@ -208,6 +208,14 @@ class BacklogAssistantAgent:
             else:
                 # Can't refine without stories, fallback to decompose
                 return "decompose"
+        elif intent in [
+            UserIntent.DECOMPOSE.value,
+            UserIntent.DECOMPOSE_TO_EPICS.value,
+            UserIntent.DECOMPOSE_TO_STORIES.value,
+            UserIntent.DECOMPOSE_TO_TASKS.value,
+            UserIntent.DECOMPOSE_TO_SUBTASKS.value,
+        ]:
+            return "decompose"
         else:
             # Default to decompose for DECOMPOSE or UNKNOWN intents
             return "decompose"
@@ -218,7 +226,8 @@ class BacklogAssistantAgent:
         has_stories = bool(state.get("stories"))
 
         capabilities = [
-            "📝 **Decompose Epics**: Provide an epic or feature description, and I'll break it into detailed user stories with acceptance criteria.",
+            "📋 **Multi-Level Decomposition**: I can break down requirements into **Epics**, **Stories**, **Tasks**, or **Sub-tasks**.",
+            "📝 **Targeted Breakdown**: Ask me to 'decompose into epics' or 'breakdown into tasks' for specific levels.",
             "✨ **Refine Stories**: Ask me to add more details, edge cases, or improve any story's acceptance criteria.",
             "🔍 **Analyze Backlog**: Request a grooming analysis to find duplicates, dependencies, or quality gaps.",
             "💾 **Export to Jira**: Save your refined stories directly to Jira with proper linking.",
@@ -369,6 +378,8 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                         "output_format": output_format,
                         "metadata": {**result.get("metadata", {}), "is_duplicate": True},
                         "usage": {},
+                        "target_level": "story",
+                        "target_issue_type": "Story",
                     }
 
         return await self.chat(
@@ -626,6 +637,8 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                 },
             },
             "usage": final_state.get("usage_metadata"),
+            "target_level": final_state.get("target_level", "story"),
+            "target_issue_type": final_state.get("target_issue_type", "Story"),
         }
 
         if current_result and self.checkpointer and hasattr(self.checkpointer, "db"):
@@ -873,6 +886,8 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                 "messages": state.get("messages", []),
                 "is_locked": state.get("is_locked", False),
                 "metadata": metadata,
+                "target_level": state.get("target_level", "story"),
+                "target_issue_type": state.get("target_issue_type", "Story"),
             }
 
         except Exception as e:
@@ -926,6 +941,8 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                 "summary": current_result.summary if current_result else None,
                 "messages": state.get("messages", []),
                 "is_locked": state.get("is_locked", False),
+                "target_level": state.get("target_level", "story"),
+                "target_issue_type": state.get("target_issue_type", "Story"),
             }
 
         except Exception as e:

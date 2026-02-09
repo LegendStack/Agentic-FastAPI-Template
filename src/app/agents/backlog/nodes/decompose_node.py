@@ -13,6 +13,7 @@ from ...azure_openai import LLMService, get_llm_service
 from ...structured_output import StructuredOutputValidator
 from ...vector_stores import VectorStoreFactory
 from ..config import BacklogAgentConfig
+from ..intents import UserIntent
 from ..prompts import get_decompose_system_prompt, get_decompose_user_prompt
 from ..schemas import AcceptanceCriteria, DecompositionResult, Epic, UserStory
 from ..state import BacklogAgentState
@@ -137,6 +138,11 @@ class DecomposeNode:
             parsed_epic = Epic.model_validate(parsed_epic)
 
         try:
+            # 0. Initial parameters
+            detected_intent = state.get("detected_intent", UserIntent.DECOMPOSE.value)
+            target_level = "story"
+            target_issue_type = self.config.JIRA_ISSUE_TYPE
+
             if self.config.USE_MOCKS:
                 result = await self._mock_decompose(parsed_epic)
                 usage = {}
@@ -147,8 +153,6 @@ class DecomposeNode:
                     logger.info(
                         f"DecomposeNode: Semantic duplicate detected. Thread ID: {duplicate_info.get('thread_id')}"
                     )
-                    # If we had a way to return the old result, we would.
-                    # For now, we continue but with a flag or warning.
 
                 # 2. Retrieve similar stories for context (Phase 13)
                 reference_stories = await self._retrieve_reference_stories(parsed_epic)
@@ -157,15 +161,30 @@ class DecomposeNode:
                 enriched_context = state.get("enriched_context", "")
 
                 # 4. LLM Decomposition with full context
+                if detected_intent == UserIntent.DECOMPOSE_TO_EPICS.value:
+                    target_level = "epic"
+                    target_issue_type = self.config.JIRA_EPIC_ISSUE_TYPE
+                elif detected_intent == UserIntent.DECOMPOSE_TO_STORIES.value:
+                    target_level = "story"
+                    target_issue_type = "Story"
+                elif detected_intent == UserIntent.DECOMPOSE_TO_TASKS.value:
+                    target_level = "task"
+                    target_issue_type = "Task"
+                elif detected_intent == UserIntent.DECOMPOSE_TO_SUBTASKS.value:
+                    target_level = "subtask"
+                    target_issue_type = "Sub-task"
+
                 story_template = state.get("story_template", self.config.STORY_TEMPLATE)
                 result, usage = await self._llm_decompose(
                     parsed_epic,
+                    target_level=target_level,
                     reference_stories=reference_stories,
                     story_template=story_template,
                     enriched_context=enriched_context,
                 )
 
-            if not self.config.USE_MOCKS:
+            # Step 5: Post-processing (only if not using mocks and result is valid)
+            if not self.config.USE_MOCKS and result:
                 if not result.stories:
                     logger.error("DecomposeNode: LLM returned empty stories list")
                     return {
@@ -174,22 +193,21 @@ class DecomposeNode:
 
                 logger.info(f"DecomposeNode: Generated {len(result.stories)} stories")
 
-                # 3. Detect duplicates for generated stories
+                # Detect duplicates for generated stories
                 await self._detect_duplicates(result.stories)
 
-                # 4. Archive this epic for future deduplication
+                # Archive this epic for future deduplication
                 await self._archive_epic(parsed_epic, state.get("thread_id"))
-
             return {
-                "stories": result.stories,
+                "stories": result.stories if result else [],
                 "current_result": result,
                 "usage_metadata": usage,
-                "is_first_message": False,  # After decomposition, next message is refinement
+                "target_issue_type": target_issue_type,
+                "is_first_message": False,
                 "error": None,
             }
 
         except Exception as e:
-            logger.error(f"DecomposeNode: Error - {e}", exc_info=True)
             return {"error": f"Decomposition failed: {str(e)}"}
 
     async def _check_duplicate_epic(self, epic: Epic) -> dict[str, Any] | None:
@@ -256,6 +274,7 @@ class DecomposeNode:
     async def _llm_decompose(
         self,
         epic: Epic,
+        target_level: str = "story",
         reference_stories: list[UserStory] | None = None,
         story_template: str = "standard",
         enriched_context: str = "",
@@ -284,6 +303,7 @@ class DecomposeNode:
 
         # Build prompts
         system_prompt = get_decompose_system_prompt(
+            target_level=target_level,
             story_template=story_template,
             ac_style=self.config.AC_STYLE,
             project_key=epic.project_key,
@@ -291,6 +311,7 @@ class DecomposeNode:
 
         user_prompt = get_decompose_user_prompt(
             epic_description=epic.description,
+            target_level=target_level,
             context=context.strip(),
             min_stories=self.config.MIN_STORIES_PER_EPIC,
             max_stories=self.config.MAX_STORIES_PER_EPIC,

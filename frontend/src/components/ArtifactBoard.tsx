@@ -17,6 +17,7 @@ interface ArtifactBoardProps {
     saveToJira?: () => void;
     isSavingToJira?: boolean;
     isLocked?: boolean;
+    targetIssueType?: string;
 }
 
 export const ArtifactBoard = ({
@@ -31,8 +32,16 @@ export const ArtifactBoard = ({
     onCollapse,
     saveToJira,
     isSavingToJira,
-    isLocked = false
+    isLocked = false,
+    targetIssueType = 'Story'
 }: ArtifactBoardProps) => {
+    const pluralize = (type: string) => {
+        if (type === 'Story') return 'Stories';
+        if (type === 'Sub-task') return 'Sub-tasks';
+        return `${type}s`;
+    };
+
+    const displayType = pluralize(targetIssueType);
     const [isVersionOpen, setIsVersionOpen] = useState(false);
     return (
         <div className="flex flex-col h-full bg-bg-primary/30 border-l border-border-primary">
@@ -61,7 +70,7 @@ export const ArtifactBoard = ({
                             )}
                         </h3>
                         <p className="text-[10px] text-text-tertiary mt-1 uppercase tracking-widest font-semibold">
-                            {stories.length} Stories Generated
+                            {stories.length} {displayType} Generated
                         </p>
                     </div>
                 </div>
@@ -172,7 +181,7 @@ export const ArtifactBoard = ({
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center opacity-50">
                             <Clock className="w-12 h-12 text-text-tertiary mb-4 animate-pulse" />
-                            <p className="text-text-secondary font-medium">No stories in this version</p>
+                            <p className="text-text-secondary font-medium">No {displayType.toLowerCase()} in this version</p>
                         </div>
                     )}
                 </AnimatePresence>
@@ -185,7 +194,7 @@ export const ArtifactBoard = ({
                         <div className="flex flex-col">
                             <span className="text-[10px] text-text-tertiary uppercase tracking-widest font-bold">Jira Sync</span>
                             <span className="text-xs text-text-secondary">
-                                {stories.filter(s => s.jira_key).length} of {stories.length} stories linked
+                                {stories.filter(s => s.jira_key).length} of {stories.length} {displayType.toLowerCase()} linked
                             </span>
                         </div>
 
@@ -205,12 +214,12 @@ export const ArtifactBoard = ({
                             ) : stories.every(s => s.jira_key) ? (
                                 <>
                                     <Check className="w-4 h-4" strokeWidth={2.5} />
-                                    All Stories Saved
+                                    All {displayType} Saved
                                 </>
                             ) : (
                                 <>
                                     <LayoutDashboard className="w-4 h-4" strokeWidth={2.5} />
-                                    Save {stories.filter(s => !s.jira_key).length} Stories to JIRA
+                                    Save {stories.filter(s => !s.jira_key).length} {displayType} to JIRA
                                 </>
                             )}
                         </button>

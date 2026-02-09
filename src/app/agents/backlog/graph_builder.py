@@ -184,8 +184,16 @@ class GraphBuilder:
             return "enhance" if has_stories else "decompose"
         elif intent == UserIntent.REFINE.value:
             return "refine" if has_stories else "decompose"
+        elif intent in [
+            UserIntent.DECOMPOSE.value,
+            UserIntent.DECOMPOSE_TO_EPICS.value,
+            UserIntent.DECOMPOSE_TO_STORIES.value,
+            UserIntent.DECOMPOSE_TO_TASKS.value,
+            UserIntent.DECOMPOSE_TO_SUBTASKS.value,
+        ]:
+            return "decompose"
         else:
-            # Default to decompose for DECOMPOSE or UNKNOWN intents
+            # Default fallback
             return "decompose"
 
     def get_workflow_diagram(self) -> str:

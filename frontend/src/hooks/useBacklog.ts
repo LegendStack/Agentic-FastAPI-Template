@@ -65,6 +65,8 @@ export interface DecomposeResponse {
     messages?: any[];
     is_locked?: boolean;
     metadata?: any;
+    target_level?: string;
+    target_issue_type?: string;
     response?: {
         epic: Epic;
     };
@@ -80,6 +82,8 @@ export const useBacklog = (initialThreadId?: string) => {
     const [currentEpic, setCurrentEpic] = useState<Epic | null>(null);
     const [currentThreadId, setCurrentThreadId] = useState<string | undefined>(initialThreadId);
     const [isLocked, setIsLocked] = useState<boolean>(false);
+    const [targetLevel, setTargetLevel] = useState<string>('story');
+    const [targetIssueType, setTargetIssueType] = useState<string>('Story');
     const { selectedProject, selectedEpic } = useProjectContext();
 
     // Load thread from URL on mount
@@ -137,6 +141,8 @@ export const useBacklog = (initialThreadId?: string) => {
             });
             if (response.data.stories) {
                 setStories(response.data.stories);
+                if (response.data.target_level) setTargetLevel(response.data.target_level);
+                if (response.data.target_issue_type) setTargetIssueType(response.data.target_issue_type);
                 toast.success('Version loaded');
             }
         } catch (err) {
@@ -238,6 +244,8 @@ export const useBacklog = (initialThreadId?: string) => {
             if (data.is_locked !== undefined) {
                 setIsLocked(data.is_locked);
             }
+            if (data.target_level) setTargetLevel(data.target_level);
+            if (data.target_issue_type) setTargetIssueType(data.target_issue_type);
         },
     });
 
@@ -262,6 +270,8 @@ export const useBacklog = (initialThreadId?: string) => {
             if (response.data.is_locked !== undefined) {
                 setIsLocked(response.data.is_locked);
             }
+            if (response.data.target_level) setTargetLevel(response.data.target_level);
+            if (response.data.target_issue_type) setTargetIssueType(response.data.target_issue_type);
 
             // Use messages from backend if provided (Phase 23 fix)
             if (response.data.messages && (response.data.messages as any).length > 0) {
@@ -381,6 +391,8 @@ export const useBacklog = (initialThreadId?: string) => {
         saveToJira: (threadId: string) => saveToJiraMutation.mutate(threadId),
         isSavingToJira: saveToJiraMutation.isPending,
         importSpec: importSpecMutation.mutateAsync,
-        isImporting: importSpecMutation.isPending
+        isImporting: importSpecMutation.isPending,
+        targetLevel,
+        targetIssueType
     };
 };

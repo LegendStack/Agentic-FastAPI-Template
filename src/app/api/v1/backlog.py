@@ -126,6 +126,8 @@ class DecomposeResponse(BaseModel):
     usage: dict[str, Any] | None = None
     jira_base_url: str | None = None
     is_locked: bool = False
+    target_level: str | None = "story"
+    target_issue_type: str | None = "Story"
 
 
 class RefineRequest(BaseModel):
@@ -307,6 +309,8 @@ async def chat_handler(
             usage=result.get("usage"),
             jira_base_url=settings.JIRA_URL,
             is_locked=result.get("is_locked", False),
+            target_level=result.get("target_level", "story"),
+            target_issue_type=result.get("target_issue_type", "Story"),
         )
     except Exception as e:
         import traceback
@@ -383,6 +387,8 @@ async def decompose_epic(
             usage=result.get("usage"),
             jira_base_url=settings.JIRA_URL,
             is_locked=result.get("is_locked", False),
+            target_level=result.get("target_level", "story"),
+            target_issue_type=result.get("target_issue_type", "Story"),
         )
     except Exception as e:
         import traceback
@@ -440,6 +446,8 @@ async def refine_decomposition(
             error=result.get("error"),
             usage=result.get("usage"),
             is_locked=result.get("is_locked", False),
+            target_level=result.get("target_level", "story"),
+            target_issue_type=result.get("target_issue_type", "Story"),
         )
     except Exception as e:
         import traceback
