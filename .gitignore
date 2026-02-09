@@ -151,3 +151,6 @@ tests/debug_thread.py
 tests/*.txt
 tests/*.log
 
+
+# Logs
+logs/
