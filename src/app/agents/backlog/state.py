@@ -79,6 +79,9 @@ class BacklogAgentState(BaseAgentState):
     # Help/Q&A (Phase 2)
     help_response: str | None
 
+    # View/Identify (Phase 14)
+    view_response: str | None
+
     # Grooming (Phase 4)
     grooming_report: dict | None
 

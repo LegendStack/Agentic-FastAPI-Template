@@ -32,13 +32,109 @@ class ExportNode:
 
     Creates issues in JIRA and returns created issue keys.
 
+    REFACTORED: Can now accept an injected JiraService for cleaner dependency
+    management. Falls back to direct httpx calls if no service is provided.
+
     Usage:
+        # With injected service (preferred)
+        jira_service = JiraService(config)
+        node = ExportNode(config=config, jira_service=jira_service)
+
+        # Legacy (backwards compatible)
         node = ExportNode(config=BacklogAgentConfig(ENABLE_JIRA_EXPORT=True))
         updated_state = await node(state)
     """
 
-    def __init__(self, config: BacklogAgentConfig | None = None):
+    def __init__(
+        self,
+        config: BacklogAgentConfig | None = None,
+        jira_service: Any = None,
+    ):
+        """
+        Initialize ExportNode.
+
+        Args:
+            config: Agent configuration
+            jira_service: Optional JiraService for dependency injection.
+                          If provided, will be used for all Jira operations.
+                          Falls back to direct httpx calls if not provided.
+        """
         self.config = config or BacklogAgentConfig()
+        self._jira_service = jira_service
+
+    # =========================================================================
+    # JiraService-based helpers (preferred when service is available)
+    # =========================================================================
+
+    def _has_jira_service(self) -> bool:
+        """Check if JiraService is available for use."""
+        return self._jira_service is not None
+
+    async def _create_epic_via_service(
+        self,
+        project_key: str,
+        title: str,
+        description: str,
+        labels: list[str] | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Create an epic using the injected JiraService.
+
+        Returns dict with key, id, etc. on success, None on failure.
+        """
+        if not self._has_jira_service():
+            return None
+
+        from ....services.jira_service import CreateEpicPayload
+
+        payload = CreateEpicPayload(
+            project_key=project_key,
+            summary=title,
+            description=description,
+            labels=labels or [],
+        )
+
+        result = await self._jira_service.create_epic(payload)
+        if result.is_ok:
+            return result.value
+        else:
+            logger.error(f"ExportNode: JiraService epic creation failed: {result.error}")
+            return None
+
+    async def _create_issue_via_service(
+        self,
+        project_key: str,
+        summary: str,
+        description: str,
+        issue_type: str = "Story",
+        parent_key: str | None = None,
+        labels: list[str] | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Create an issue using the injected JiraService.
+
+        Returns dict with key, id, etc. on success, None on failure.
+        """
+        if not self._has_jira_service():
+            return None
+
+        from ....services.jira_service import CreateIssuePayload
+
+        payload = CreateIssuePayload(
+            project_key=project_key,
+            summary=summary,
+            description=description,
+            issue_type=issue_type,
+            parent_key=parent_key,
+            labels=labels or [],
+        )
+
+        result = await self._jira_service.create_issue(payload)
+        if result.is_ok:
+            return result.value
+        else:
+            logger.error(f"ExportNode: JiraService issue creation failed: {result.error}")
+            return None
 
     async def __call__(self, state: BacklogAgentState) -> dict[str, Any]:
         """
@@ -158,9 +254,208 @@ class ExportNode:
             "stories": result.stories,
         }
 
-    async def _jira_export(self, result: DecompositionResult, state: BacklogAgentState) -> dict[str, Any]:
-        """Create issues in JIRA."""
+    async def _jira_export_via_service(self, result: DecompositionResult, state: BacklogAgentState) -> dict[str, Any]:
+        """
+        Create issues in JIRA using the injected JiraService.
+
+        This is the preferred method when JiraService is available.
+        It provides retry logic, consistent error handling, and better observability.
+        """
+        if not self._jira_service:
+            raise RuntimeError("JiraService not available")
+
+        from ....services.jira_service import CreateEpicPayload, CreateIssuePayload
+
+        # Determine project key (Priority: Epic > State > Config > Default)
+        project_key = (
+            (result.epic.project_key if result.epic else None)
+            or state.get("project_key")
+            or self.config.JIRA_PROJECT_KEY
+            or "PROJ"
+        )
+
         base_url = settings.JIRA_URL
+        created_issues = []
+        errors = []
+        current_parent_epic_id = state.get("parent_epic_id")
+
+        # 1. Handle Epic creation/update
+        if current_parent_epic_id:
+            # Epic exists, try to update it
+            if result.epic:
+                try:
+                    logger.info(f"ExportNode: Updating existing Epic {current_parent_epic_id} via service")
+                    update_result = await self._jira_service.update_issue(
+                        current_parent_epic_id,
+                        {
+                            "summary": result.epic.title,
+                            "description": result.epic.description,
+                        },
+                    )
+                    if update_result.is_error:
+                        logger.warning(
+                            f"ExportNode: Failed to update Epic {current_parent_epic_id}: {update_result.error}"
+                        )
+                except Exception as e:
+                    logger.warning(f"ExportNode: Failed to update Epic {current_parent_epic_id}: {e}")
+        elif result.epic:
+            # Create new Epic
+            try:
+                logger.info(f"ExportNode: Creating new Epic '{result.epic.title}' via service")
+                payload = CreateEpicPayload(
+                    project_key=project_key,
+                    summary=result.epic.title,
+                    description=result.epic.description or "",
+                    labels=(self.config.DEFAULT_TAGS or []) + ["ai"],
+                )
+                epic_result = await self._jira_service.create_epic(payload)
+
+                if epic_result.is_ok:
+                    current_parent_epic_id = epic_result.value
+                    logger.info(f"ExportNode: New Epic created with key {current_parent_epic_id}")
+                    created_issues.append(
+                        {
+                            "internal_id": "EPIC",
+                            "jira_key": current_parent_epic_id,
+                            "url": f"{base_url}/browse/{current_parent_epic_id}",
+                            "status": "created",
+                            "summary": result.epic.title,
+                            "issuetype": self.config.JIRA_EPIC_ISSUE_TYPE,
+                        }
+                    )
+                else:
+                    errors.append(
+                        {
+                            "story_id": "EPIC_CREATION",
+                            "error": f"Failed to create Epic: {epic_result.error.message}",
+                        }
+                    )
+            except Exception as e:
+                logger.error(f"ExportNode: Failed to create Epic: {e}")
+                errors.append({"story_id": "EPIC_CREATION", "error": str(e)})
+
+        # 2. Handle Story creation/update
+        for story in result.stories:
+            try:
+                # Build description with rich fields
+                description_parts = [story.description, ""]
+
+                if story.acceptance_criteria:
+                    ac_text = "\n".join([f"* {ac.description}" for ac in story.acceptance_criteria])
+                    description_parts.append("h3. Acceptance Criteria")
+                    description_parts.append(ac_text)
+                    description_parts.append("")
+
+                if story.technical_notes:
+                    tech_notes_text = "\n".join([f"* {note}" for note in story.technical_notes])
+                    description_parts.append("h3. Technical Notes")
+                    description_parts.append(tech_notes_text)
+                    description_parts.append("")
+
+                if story.edge_cases:
+                    description_parts.append("h3. Edge Cases")
+                    for ec in story.edge_cases:
+                        description_parts.append(f"* {ec}")
+                    description_parts.append("")
+
+                full_description = "\n".join(description_parts).strip()
+                labels = (story.tags or []) + (self.config.DEFAULT_TAGS or []) + ["ai"]
+
+                if story.jira_key:
+                    # Update existing issue
+                    update_result = await self._jira_service.update_issue(
+                        story.jira_key,
+                        {
+                            "summary": story.title,
+                            "description": full_description,
+                            "labels": labels,
+                        },
+                    )
+
+                    if update_result.is_ok:
+                        created_issues.append(
+                            {
+                                "internal_id": story.id,
+                                "jira_key": story.jira_key,
+                                "url": f"{base_url}/browse/{story.jira_key}",
+                                "status": "updated",
+                                "summary": story.title,
+                            }
+                        )
+                    else:
+                        # Create if update failed with 404
+                        raise ValueError("Create new (update failed)")
+                else:
+                    raise ValueError("Create new")
+
+            except ValueError:
+                # Create new issue
+                try:
+                    payload = CreateIssuePayload(
+                        project_key=project_key,
+                        summary=story.title,
+                        description=full_description,
+                        issue_type=self.config.JIRA_ISSUE_TYPE,
+                        parent_key=current_parent_epic_id,
+                        labels=labels,
+                    )
+
+                    create_result = await self._jira_service.create_issue(payload)
+
+                    if create_result.is_ok:
+                        created_issues.append(
+                            {
+                                "internal_id": story.id,
+                                "jira_key": create_result.value,
+                                "url": f"{base_url}/browse/{create_result.value}",
+                                "status": "created",
+                                "summary": story.title,
+                            }
+                        )
+                    else:
+                        errors.append(
+                            {
+                                "story_id": story.id,
+                                "error": create_result.error.message,
+                            }
+                        )
+                except Exception as e:
+                    errors.append({"story_id": story.id, "error": str(e)})
+            except Exception as e:
+                errors.append({"story_id": story.id, "error": str(e)})
+
+        status = "success" if not errors else "partial_success" if created_issues else "error"
+
+        # Update stories with Jira info
+        jira_lookup = {issue["internal_id"]: issue for issue in created_issues}
+        for story in result.stories:
+            if story.id in jira_lookup:
+                story.jira_key = jira_lookup[story.id]["jira_key"]
+                story.jira_url = jira_lookup[story.id]["url"]
+
+        return {
+            "status": status,
+            "message": f"Created {len(created_issues)} of {len(result.stories)} issues via JiraService",
+            "issues": created_issues,
+            "errors": errors,
+            "epic_key": current_parent_epic_id,
+            "stories": result.stories,
+        }
+
+    async def _jira_export(self, result: DecompositionResult, state: BacklogAgentState) -> dict[str, Any]:
+        """
+        Create issues in JIRA.
+
+        Uses JiraService if available, falls back to direct httpx calls otherwise.
+        """
+        # Prefer JiraService when available (provides retry logic and consistent error handling)
+        if self._has_jira_service():
+            logger.info("ExportNode: Using JiraService for export")
+            return await self._jira_export_via_service(result, state)
+
+        logger.info("ExportNode: Using legacy httpx export (JiraService not available)")
+        base_url = settings.JIRA_URL
+
         auth = (settings.JIRA_USERNAME, settings.JIRA_API_TOKEN.get_secret_value())
 
         # Determine project key (Priority: Epic > State > Config > Default)
@@ -298,6 +593,7 @@ class ExportNode:
             "status": status,
             "message": f"Created {len(created_issues)} of {len(result.stories)} issues",
             "issues": created_issues,
+            "errors": errors,  # Phase 50 Fix: Pass errors back to API
             "epic_key": current_parent_epic_id,
             "stories": result.stories,  # Pass updated stories back
         }

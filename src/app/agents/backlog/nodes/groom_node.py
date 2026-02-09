@@ -7,9 +7,8 @@ dependencies, and provides prioritization recommendations.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
-
 from difflib import SequenceMatcher
+from typing import Any
 
 from ...azure_openai import LLMService
 from ..config import BacklogAgentConfig

@@ -1,9 +1,17 @@
+"""
+Jira Indexer.
+=============
+Index issues from Atlassian Jira using JiraService.
+
+Refactored to use the centralized JiraService for API calls,
+providing retry logic and consistent error handling.
+"""
+
 import logging
 from typing import Any
 
-import httpx
-
 from ..core.config import settings
+from ..services.jira_service import JiraService, JiraConfig
 from .azure_openai import LLMService
 from .base import BaseIndexer, BaseVectorStore
 
@@ -13,44 +21,67 @@ logger = logging.getLogger(__name__)
 class JiraIndexer(BaseIndexer):
     """
     Indexer for Jira Data Center issue data.
-    Implements efficient incremental sync patterns.
+    
+    Uses JiraService for all API interactions, providing:
+    - Retry logic with exponential backoff
+    - Consistent error handling
+    - Result type for explicit success/error handling
     """
 
-    def __init__(self, vector_store: BaseVectorStore, llm_service: LLMService):
+    def __init__(
+        self,
+        vector_store: BaseVectorStore,
+        llm_service: LLMService,
+        jira_service: JiraService | None = None,
+    ):
         self.vector_store = vector_store
         self.llm_service = llm_service
-        self.base_url = settings.JIRA_URL
-        self.username = settings.JIRA_USERNAME
-        self.api_token = settings.JIRA_API_TOKEN
+        
+        # Use injected service or create one from settings
+        if jira_service:
+            self._jira_service = jira_service
+        else:
+            config = JiraConfig.from_settings(settings)
+            self._jira_service = JiraService(config) if config.is_configured else None
 
     async def _fetch_issues(self, jql: str, limit: int = 50, start_at: int = 0) -> list[dict[str, Any]]:
-        """Fetch issues from Jira DC using the search API."""
-        if not self.base_url or not self.api_token:
-            logger.error("Jira configuration missing.")
+        """Fetch issues from Jira using JiraService.search_issues()."""
+        if not self._jira_service:
+            logger.error("Jira configuration missing or JiraService not available.")
             return []
 
-        url = f"{self.base_url}/rest/api/2/search"
-        auth = (self.username, self.api_token.get_secret_value())
+        # Use JiraService's search_issues method
+        result = await self._jira_service.search_issues(
+            jql=jql,
+            max_results=limit,
+            start_at=start_at,
+            fields=["summary", "description", "comment", "status", "updated"],
+        )
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                url,
-                params={
-                    "jql": jql,
-                    "maxResults": limit,
-                    "startAt": start_at,
-                    "fields": "summary,description,comment,status,updated",
+        if result.is_error:
+            logger.error(f"Failed to search issues: {result.error.message}")
+            return []
+
+        # Convert JiraIssue objects to dicts for backward compatibility
+        return [
+            {
+                "key": issue.key,
+                "fields": {
+                    "summary": issue.summary,
+                    "description": issue.description,
+                    "status": {"name": issue.status},
                 },
-                auth=auth,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("issues", [])
+            }
+            for issue in result.value
+        ]
 
     async def run(self, project_key: str, force: bool = False) -> dict[str, Any]:
         """
         Sync issues for a project.
-        In a real scenario, we'd use 'updated > last_sync_time'.
+        
+        Args:
+            project_key: The Jira project key (e.g., "PROJ")
+            force: If True, reindex all issues. Otherwise, incremental.
         """
         jql = f"project = {project_key}"
         if not force:

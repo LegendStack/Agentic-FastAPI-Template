@@ -11,29 +11,32 @@ from enum import Enum
 class UserIntent(str, Enum):
     """
     Enum representing the possible user intents.
-    
+
     The agent classifies incoming messages into one of these intents
     to determine the appropriate workflow path.
     """
-    
+
     DECOMPOSE = "decompose"
     """Break down an epic, feature, or requirement into user stories."""
-    
+
     REFINE = "refine"
     """Improve, modify, or enhance existing stories in the backlog."""
-    
+
     ENHANCE = "enhance"
     """Enhance a specific story with targeted improvements (ACs, edge cases, BDD)."""
-    
+
     HELP = "help"
     """Answer questions, explain capabilities, or provide guidance."""
-    
+
     GROOM = "groom"
     """Analyze backlog for duplicates, dependencies, or quality issues."""
-    
+
+    VIEW = "view"
+    """Retrieve and display details for a specific entity without decomposing it."""
+
     ESTIMATE = "estimate"
     """Provide story point estimates or effort analysis. (Future)"""
-    
+
     UNKNOWN = "unknown"
     """Fallback when intent cannot be determined."""
 
@@ -60,25 +63,25 @@ INTENT_DESCRIPTIONS: dict[UserIntent, str] = {
         "User wants to analyze the current backlog for issues like duplicates, "
         "missing dependencies, quality gaps, or prioritization recommendations."
     ),
-    UserIntent.ESTIMATE: (
-        "User wants story point estimates, effort analysis, or complexity evaluation. (Future)"
+    UserIntent.VIEW: (
+        "User wants to view, identify, or see details for a specific Jira entity or story. "
+        "They are asking 'what is this' or 'identify this' rather than wanting to break it down."
     ),
+    UserIntent.ESTIMATE: ("User wants story point estimates, effort analysis, or complexity evaluation. (Future)"),
 }
 
 
 def get_intent_classification_prompt() -> str:
     """
     Generate the system prompt for intent classification.
-    
+
     Returns:
         System prompt instructing the LLM to classify user intent.
     """
     intent_list = "\n".join(
-        f"- **{intent.value}**: {desc}"
-        for intent, desc in INTENT_DESCRIPTIONS.items()
-        if intent != UserIntent.UNKNOWN
+        f"- **{intent.value}**: {desc}" for intent, desc in INTENT_DESCRIPTIONS.items() if intent != UserIntent.UNKNOWN
     )
-    
+
     return f"""You are an intent classifier for a Backlog Assistant agent.
 
 Your task is to analyze the user's message and classify their intent into ONE of these categories:
@@ -89,11 +92,12 @@ Your task is to analyze the user's message and classify their intent into ONE of
 1. If the user provides substantial content (epic description, feature request, requirements), classify as "decompose"
 2. If the user references existing stories and wants changes, classify as "refine"
 3. If the user asks questions, greetings, or seeks help, classify as "help"
-4. If the user wants analysis of the backlog (duplicates, dependencies), classify as "groom"
-5. When in doubt, prefer "help" over incorrectly triggering a workflow
+4. If the user wants to simply view or identify a specific story or entity, classify as "view"
+5. If the user wants analysis of the backlog (duplicates, dependencies), classify as "groom"
+6. When in doubt, prefer "help" over incorrectly triggering a workflow
 
 ## Output:
-Respond with ONLY the intent value (lowercase): decompose, refine, help, groom, or estimate
+Respond with ONLY the intent value (lowercase): decompose, refine, help, view, groom, or estimate
 Do not include any other text."""
 
 

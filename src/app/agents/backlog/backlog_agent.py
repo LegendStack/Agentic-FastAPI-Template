@@ -10,6 +10,9 @@ This agent uses LangGraph to manage a conversational workflow that:
 4. Formats output (JSON/Markdown/JIRA)
 5. Optionally exports to JIRA
 
+REFACTORED: Delegates node creation to NodeFactory and graph building to GraphBuilder
+for cleaner architecture and dependency injection.
+
 Example Usage:
     # Basic decomposition
     agent = BacklogAssistantAgent()
@@ -29,30 +32,23 @@ Example Usage:
 
 import logging
 import uuid
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import END, START, StateGraph
 
 from ...core.config import settings
 from ..conversations import ConversationService
 from .config import BacklogAgentConfig
-from .nodes import (
-    CriticNode,
-    DecomposeNode,
-    EntityExtractionNode,
-    ExportNode,
-    FormatNode,
-    InputNode,
-    IntentNode,
-    PrioritizeNode,
-    RefineNode,
-    StoryEnhanceNode,
-    TestGenNode,
-)
+from .graph_builder import GraphBuilder
 from .intents import UserIntent
+from .node_factory import NodeFactory
 from .schemas import DecompositionResult
 from .state import BacklogAgentState
+
+if TYPE_CHECKING:
+    from ...services.jira_service import JiraService
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +87,7 @@ class BacklogAssistantAgent:
         self,
         config: BacklogAgentConfig | None = None,
         checkpointer: BaseCheckpointSaver | None = None,
+        jira_service: "JiraService | None" = None,
     ):
         """
         Initialize the Backlog Assistant Agent.
@@ -98,11 +95,14 @@ class BacklogAssistantAgent:
         Args:
             config: Optional configuration. Defaults to all features enabled with mocks.
             checkpointer: Optional LangGraph checkpointer for state persistence.
+            jira_service: Optional JiraService for dependency injection.
+                          If provided, nodes that need Jira access will use this service.
         """
         self.config = config or BacklogAgentConfig()
         self.checkpointer = checkpointer
+        self._jira_service = jira_service
 
-        # Initialize nodes
+        # Initialize nodes (with injected JiraService if provided)
         self._init_nodes()
 
         # Build the graph
@@ -135,88 +135,41 @@ class BacklogAssistantAgent:
         logger.info("BacklogAssistantAgent: Infrastructure initialization complete.")
 
     def _init_nodes(self) -> None:
-        """Initialize all workflow nodes."""
-        self.input_node = InputNode()
-        self.entity_extraction_node = EntityExtractionNode()
-        self.intent_node = IntentNode(llm=self.config.get_llm())
-        self.decompose_node = DecomposeNode(config=self.config)
-        self.refine_node = RefineNode(config=self.config)
-        self.enhance_node = StoryEnhanceNode(config=self.config)
-        self.critic_node = CriticNode(config=self.config)
-        self.test_gen_node = TestGenNode(config=self.config)
-        self.format_node = FormatNode(config=self.config)
-        self.prioritize_node = PrioritizeNode(config=self.config)
-        self.save_node = ExportNode(config=self.config)
-
-    def _build_graph(self) -> StateGraph:
         """
-        Build the LangGraph workflow.
+        Initialize all workflow nodes using NodeFactory.
+
+        Delegates node creation to NodeFactory for proper dependency injection.
+        """
+        factory = NodeFactory(
+            config=self.config,
+            jira_service=self._jira_service,
+        )
+
+        # Create all nodes via factory
+        self._nodes = factory.create_all(
+            help_node_fn=self._help_node,
+            view_node_fn=self._view_node,
+            groom_node_fn=self._groom_node,
+        )
+
+        logger.info("BacklogAssistantAgent: Nodes initialized via NodeFactory")
+
+    def _build_graph(self):
+        """
+        Build the LangGraph workflow using GraphBuilder.
+
+        Delegates graph construction to GraphBuilder for cleaner separation.
 
         Flow:
             START → input → entity_extractor → intent_classifier → [decompose | refine | help | groom]
                                                                    ↓
                                                         (optional) export
         """
-        workflow = StateGraph(BacklogAgentState)
+        builder = GraphBuilder(self._nodes)
+        graph = builder.build(checkpointer=self.checkpointer)
 
-        # Add nodes
-        workflow.add_node("input", self.input_node)
-        workflow.add_node("entity_extractor", self.entity_extraction_node)
-        workflow.add_node("intent_classifier", self.intent_node)
-        workflow.add_node("decompose", self.decompose_node)
-        workflow.add_node("refine", self.refine_node)
-        workflow.add_node("enhance", self.enhance_node)
-        workflow.add_node("help", self._help_node)
-        workflow.add_node("groom", self._groom_node)
-        workflow.add_node("critic", self.critic_node)
-        workflow.add_node("test_gen", self.test_gen_node)
-        workflow.add_node("format", self.format_node)
-        workflow.add_node("prioritize", self.prioritize_node)
-        workflow.add_node("save_to_jira", self.save_node)
-
-        # Define edges: input → entity_extractor → intent_classifier
-        workflow.add_edge(START, "input")
-        workflow.add_edge("input", "entity_extractor")
-        workflow.add_edge("entity_extractor", "intent_classifier")
-
-        # Conditional routing after intent classification
-        workflow.add_conditional_edges(
-            "intent_classifier",
-            self._route_after_intent,
-            {
-                "decompose": "decompose",
-                "refine": "refine",
-                "enhance": "enhance",
-                "help": "help",
-                "groom": "groom",
-                "save_to_jira": "save_to_jira",
-                "error": END,
-            },
-        )
-
-        # Decompose and Refine go to Critic
-        workflow.add_edge("decompose", "critic")
-        workflow.add_edge("refine", "critic")
-
-        # Critic goes to parallel branches: Prioritize and TestGen
-        # Note: LangGraph doesn't support true parallel branching easily without fan-out/fan-in.
-        # We'll sequence them: Critic -> TestGen -> Prioritize
-        workflow.add_edge("critic", "test_gen")
-        workflow.add_edge("test_gen", "prioritize")
-
-        # Prioritize goes to format
-        workflow.add_edge("prioritize", "format")
-        workflow.add_edge("save_to_jira", "format")
-
-        # Help and Groom go directly to format (no critic needed)
-        workflow.add_edge("help", "format")
-        workflow.add_edge("groom", "format")
-        workflow.add_edge("enhance", "format")  # Enhance goes to format (single-story update)
-
-        # Format goes to end
-        workflow.add_edge("format", END)
-
-        return workflow.compile(checkpointer=self.checkpointer)
+        logger.info("BacklogAssistantAgent: Graph built via GraphBuilder")
+        return graph
 
     def _route_after_intent(self, state: BacklogAgentState) -> str:
         """Route based on detected intent and state."""
@@ -235,6 +188,8 @@ class BacklogAssistantAgent:
         # Route based on detected intent
         if intent == UserIntent.HELP.value:
             return "help"
+        elif intent == UserIntent.VIEW.value:
+            return "view"
         elif intent == UserIntent.GROOM.value:
             if has_stories:
                 return "groom"
@@ -261,19 +216,19 @@ class BacklogAssistantAgent:
         """Generate a help response explaining agent capabilities."""
         project_key = state.get("project_key", "your project")
         has_stories = bool(state.get("stories"))
-        
+
         capabilities = [
             "📝 **Decompose Epics**: Provide an epic or feature description, and I'll break it into detailed user stories with acceptance criteria.",
             "✨ **Refine Stories**: Ask me to add more details, edge cases, or improve any story's acceptance criteria.",
             "🔍 **Analyze Backlog**: Request a grooming analysis to find duplicates, dependencies, or quality gaps.",
             "💾 **Export to Jira**: Save your refined stories directly to Jira with proper linking.",
         ]
-        
+
         context_hint = ""
         if has_stories:
             story_count = len(state.get("stories", []))
             context_hint = f"\n\n📋 **Current Session**: You have {story_count} stories in your backlog. Try asking me to refine them or analyze for duplicates!"
-        
+
         help_text = f"""# 👋 Hello! I'm your Backlog Assistant
 
 I help agile teams create high-quality user stories from epic descriptions.
@@ -286,19 +241,34 @@ I help agile teams create high-quality user stories from epic descriptions.
 ## Quick Start:
 Just describe your epic or feature, and I'll create a detailed breakdown for you!
 """
-        
+
         return {"help_response": help_text}
+
+    async def _view_node(self, state: BacklogAgentState) -> dict:
+        """Hydrate and format context for specific Jira entities without decomposing."""
+        enriched_context = state.get("enriched_context")
+        entities = state.get("extracted_entities", [])
+
+        if not enriched_context or not entities:
+            return {
+                "view_response": "I couldn't find any Jira entities in your message to identify. Please provide a key like 'PROJ-123'."
+            }
+
+        # Build a nice display from enriched_context (which already has hydrated info)
+        display_text = f"# 🔍 Entity Identity\n\nI've retrieved details for {len(entities)} referenced item(s):\n\n{enriched_context}"
+
+        return {"view_response": display_text}
 
     async def _groom_node(self, state: BacklogAgentState) -> dict:
         """
         Analyze backlog for quality issues.
-        
+
         This method delegates to the GroomNode class for comprehensive analysis
         including duplicate detection, dependency mapping, and quality checks.
         """
         # Import here to avoid circular imports
         from .nodes.groom_node import GroomNode
-        
+
         groom = GroomNode(config=self.config)
         return await groom(state)
 
@@ -337,13 +307,39 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
         # This prevents help queries from being matched to cached decompositions
         lower_input = epic_description.lower().strip()
         help_patterns = [
-            "help", "how can you", "what can you", "what do you",
-            "who are you", "capabilities", "introduce", "hello", "hi",
+            "help",
+            "how can you",
+            "what can you",
+            "what do you",
+            "who are you",
+            "capabilities",
+            "introduce",
+            "hello",
+            "hi",
         ]
-        
-        # If this looks like a help request, go directly to chat (which will route to help)
-        if any(pattern in lower_input for pattern in help_patterns) and len(epic_description) < 100:
-            logger.info("BacklogAgent.decompose: Detected help intent, bypassing duplicate check")
+
+        # View/Identity patterns - user wants to see details, not decompose
+        view_patterns = [
+            "identify",
+            "identity",
+            "show me",
+            "what is",
+            "details for",
+            "view",
+            "get details",
+            "describe story",
+            "lookup",
+            "who is working",
+            "status of",
+        ]
+
+        # If this looks like a help or view request, go directly to chat (which will route correctly)
+        is_help = any(pattern in lower_input for pattern in help_patterns) and len(epic_description) < 100
+        is_view = any(pattern in lower_input for pattern in view_patterns) and len(epic_description) < 100
+
+        if is_help or is_view:
+            intent_type = "help" if is_help else "view"
+            logger.info(f"BacklogAgent.decompose: Detected {intent_type} intent, bypassing duplicate check")
             return await self.chat(
                 thread_id=thread_id,
                 message=full_input,
@@ -536,6 +532,13 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
             "user_id": user_id or existing_state.get("user_id"),
             "error": None,
             "metadata": existing_state.get("metadata", {}),
+            # Transient fields - RESET at start of each turn to prevent state leakage
+            "summary": None,
+            "help_response": None,
+            "view_response": None,
+            "grooming_report": None,
+            "detected_intent": None,
+            "refinement_feedback": None,
         }
 
         if self.checkpointer:
@@ -793,15 +796,16 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                             f"BacklogAssistantAgent: Failed to post Jira links message to thread {thread_id}"
                         )
 
-            # Update state ONCE with stories and potentially new message
-            new_state = {**state, **update_dict}
-            await self.graph.aupdate_state(config, new_state)
+        # Update state ONCE with stories and potentially new message
+        is_locked = save_result.get("is_locked", False)
+        new_state = {**state, **update_dict, "is_locked": is_locked}
+        await self.graph.aupdate_state(config, new_state)
 
         return {
             "thread_id": thread_id,
             "export_result": save_result.get("export_result"),
             "stories": save_result.get("stories", []),
-            "is_locked": True,
+            "is_locked": save_result.get("is_locked", False),
             "error": save_result.get("error"),
         }
 

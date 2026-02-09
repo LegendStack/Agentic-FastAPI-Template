@@ -124,6 +124,8 @@ class ContextHydrator:
 
     This class fetches issue details, parent relationships, and
     child issues to provide rich context for the agent.
+
+    REFACTORED: Now uses injected JiraService instead of circular HTTP calls.
     """
 
     def __init__(self, jira_service: Any = None):
@@ -131,23 +133,46 @@ class ContextHydrator:
         Initialize the context hydrator.
 
         Args:
-            jira_service: Optional JiraService instance for API calls.
-                         If not provided, will be lazy-loaded.
+            jira_service: JiraService instance for fetching issue details.
+                          If None, hydration will be skipped gracefully.
         """
         self._jira_service = jira_service
 
-    @property
-    def jira_service(self):
-        """Lazy-load Jira service to avoid circular imports."""
-        if self._jira_service is None:
-            try:
-                from ...integrations.jira.service import JiraService
+    async def _get_issue_from_service(self, issue_key: str) -> dict | None:
+        """
+        Fetch issue details using the injected JiraService.
 
-                self._jira_service = JiraService()
-            except ImportError:
-                logger.warning("ContextHydrator: JiraService not available")
+        Falls back gracefully if no service is available.
+        """
+        if self._jira_service is None:
+            logger.warning(f"ContextHydrator: No JiraService available, skipping hydration for {issue_key}")
+            return None
+
+        try:
+            # Use the injected JiraService
+            result = await self._jira_service.get_issue(issue_key)
+
+            if result.is_ok:
+                issue = result.value
+                logger.info(f"ContextHydrator: Got issue {issue_key}: {issue.summary[:50]}")
+                # Convert JiraIssue to dict format expected by hydration logic
+                return {
+                    "key": issue.key,
+                    "summary": issue.summary,
+                    "description": issue.description,
+                    "issue_type": issue.issue_type,
+                    "status": issue.status,
+                    "priority": issue.priority,
+                    "labels": issue.labels,
+                    "parent": {"key": issue.parent_key} if issue.parent_key else None,
+                }
+            else:
+                logger.warning(f"ContextHydrator: Failed to fetch {issue_key}: {result.error}")
                 return None
-        return self._jira_service
+
+        except Exception as e:
+            logger.error(f"ContextHydrator: Error fetching {issue_key}: {e}")
+            return None
 
     async def hydrate_entities(
         self,
@@ -168,10 +193,7 @@ class ContextHydrator:
         Returns:
             Same entities with hydrated_context populated
         """
-        if not self.jira_service:
-            logger.warning("ContextHydrator: Skipping hydration - no Jira service")
-            return entities
-
+        logger.info(f"ContextHydrator: Starting hydration for {len(entities)} entities: {[e.key for e in entities]}")
         import asyncio
 
         # Hydrate all issue entities in parallel
@@ -180,29 +202,28 @@ class ContextHydrator:
                 return entity
 
             try:
-                # Fetch issue details
-                issue = await self.jira_service.get_issue(entity.key)
+                # Fetch issue details via injected JiraService
+                issue = await self._get_issue_from_service(entity.key)
                 if issue:
                     entity.hydrated_context = {
-                        "key": issue.get("key"),
-                        "summary": issue.get("fields", {}).get("summary"),
-                        "description": issue.get("fields", {}).get("description"),
-                        "issuetype": issue.get("fields", {}).get("issuetype", {}).get("name"),
-                        "status": issue.get("fields", {}).get("status", {}).get("name"),
-                        "priority": issue.get("fields", {}).get("priority", {}).get("name"),
-                        "labels": issue.get("fields", {}).get("labels", []),
+                        "key": issue.get("key") or entity.key,
+                        "summary": issue.get("summary"),
+                        "description": issue.get("description"),
+                        "issuetype": issue.get("issue_type") or issue.get("issuetype"),
+                        "status": issue.get("status"),
+                        "priority": issue.get("priority"),
+                        "labels": issue.get("labels", []),
                         "parent": None,
                         "children": [],
                     }
 
-                    # Fetch parent if requested
-                    if include_parent:
-                        parent = issue.get("fields", {}).get("parent")
-                        if parent:
-                            entity.hydrated_context["parent"] = {
-                                "key": parent.get("key"),
-                                "summary": parent.get("fields", {}).get("summary"),
-                            }
+                    # Check for parent info in response
+                    if include_parent and issue.get("parent"):
+                        parent = issue.get("parent")
+                        entity.hydrated_context["parent"] = {
+                            "key": parent.get("key"),
+                            "summary": parent.get("summary"),
+                        }
 
                     logger.info(
                         f"ContextHydrator: Hydrated {entity.key} - {entity.hydrated_context.get('summary', 'N/A')}"
@@ -290,14 +311,19 @@ class EntityExtractionNode:
         """
         # Get user input from various possible sources
         user_input = state.get("epic_input") or ""
+        logger.info(f"EntityExtractionNode: epic_input={user_input[:100] if user_input else 'EMPTY'!r}")
+
         if not user_input:
             messages = state.get("messages", [])
+            logger.info(f"EntityExtractionNode: Checking messages, count={len(messages)}")
             for msg in reversed(messages):
-                if msg.get("role") == "human":
+                if msg.get("role") in ["user", "human"]:
                     user_input = msg.get("content", "")
+                    logger.info(f"EntityExtractionNode: Found user message={user_input[:100]!r}")
                     break
 
         if not user_input:
+            logger.warning("EntityExtractionNode: No user input found in epic_input or messages!")
             return {
                 "extracted_entities": [],
                 "enriched_context": "",

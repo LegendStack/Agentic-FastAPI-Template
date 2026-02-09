@@ -69,14 +69,31 @@ class DecomposeRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """Request body for conversational refinement."""
+    """
+    Request body for unified chat interactions.
+
+    This is the primary request model for the /chat endpoint.
+    The agent internally classifies intent and routes appropriately.
+    """
 
     message: str = Field(
         ...,
-        description="User message for refinement",
+        description="User message (query, epic description, or refinement feedback)",
         min_length=1,
-        max_length=5000,
-        examples=["Add more edge cases for the authentication stories"],
+        max_length=10000,
+        examples=[
+            "Add more edge cases for the authentication stories",
+            "Show me details for PDLC-24",
+            "How can you help me?",
+        ],
+    )
+    thread_id: str | None = Field(
+        None,
+        description="Optional thread ID to continue an existing conversation",
+    )
+    project_key: str | None = Field(
+        None,
+        description="Optional JIRA project key to scope operations",
     )
     output_format: Literal["json", "markdown", "jira"] | None = Field(
         None,
@@ -96,13 +113,13 @@ class ChatRequest(BaseModel):
 
 
 class DecomposeResponse(BaseModel):
-    """Response model for decomposition result."""
+    """Response model for chat/decomposition result."""
 
-    thread_id: str
-    story_count: int
-    summary: str | None
-    output_format: str
-    stories: list[UserStory]
+    thread_id: str = ""  # May be empty for VIEW/HELP flows
+    story_count: int = 0  # Zero for non-decompose flows
+    summary: str | None = None
+    output_format: str = "json"
+    stories: list[UserStory] = []
     formatted_output: str | None = None
     recommendations: list[str] = []
     error: str | None = None
@@ -166,11 +183,32 @@ def get_agent(
     db: AsyncSession,
     config: BacklogAgentConfig | None = None,
 ) -> Any:
-    """Create a BacklogAssistantAgent with database persistence."""
+    """
+    Create a BacklogAssistantAgent with database persistence and Jira integration.
+
+    This function now creates a JiraService instance and injects it into the agent,
+    enabling proper dependency injection for Jira operations.
+    """
     from ...agents.backlog import BacklogAssistantAgent
+    from ...services.jira_service import JiraConfig, JiraConfigurationError, JiraService
 
     checkpointer = SqlAlchemyCheckpointSaver(db)
-    return BacklogAssistantAgent(config=config, checkpointer=checkpointer)
+
+    # Create JiraService for dependency injection
+    jira_service = None
+    try:
+        jira_config = JiraConfig.from_settings()
+        if jira_config.is_configured:
+            jira_service = JiraService(jira_config)
+    except JiraConfigurationError:
+        # Jira not configured - agent will work without Jira features
+        pass
+
+    return BacklogAssistantAgent(
+        config=config,
+        checkpointer=checkpointer,
+        jira_service=jira_service,
+    )
 
 
 # === API Endpoints ===
@@ -193,6 +231,82 @@ async def import_file(
         text = text[:10000] + "\n\n... (truncated)"
 
     return DecomposeRequest(epic_description=text, output_format="json")
+
+
+@router.post("/chat", response_model=DecomposeResponse)
+async def chat_handler(
+    request: ChatRequest,
+    db: Annotated[AsyncSession, Depends(async_get_db)] = None,
+    current_user: Annotated[User, Depends(get_optional_user)] = None,
+) -> DecomposeResponse:
+    """
+    Unified chat endpoint for all Backlog Assistant interactions.
+
+    This is the primary entry point for the agent. It handles:
+    - **DECOMPOSE**: Epic descriptions → user stories
+    - **VIEW**: Jira entity queries (e.g., "show me PDLC-24")
+    - **HELP**: Capability questions (e.g., "what can you do?")
+    - **REFINE**: Story improvement requests
+    - **GROOM**: Backlog analysis
+    - **ENHANCE**: Story detail additions
+
+    The agent internally classifies intent and routes to the appropriate handler.
+    """
+    config = BacklogAgentConfig(
+        DEFAULT_OUTPUT_FORMAT=request.output_format or "json",
+        USE_MOCKS=False,
+    )
+
+    try:
+        agent = get_agent(db, config=config)
+        user_id = str(current_user.id) if current_user else "anonymous"
+
+        # Generate thread_id for new conversations
+        import uuid
+
+        thread_id = request.thread_id or str(uuid.uuid4())
+
+        # Use the chat method which runs the full graph with intent classification
+        result = await agent.chat(
+            thread_id=thread_id,  # Required first positional arg
+            message=request.message,
+            project_key=request.project_key,
+            parent_epic_id=request.parent_epic_id,
+            user_id=user_id,
+            output_format=request.output_format,
+            initial_stories=request.stories,
+        )
+
+        if result.get("error"):
+            return DecomposeResponse(
+                thread_id=result.get("thread_id", ""),
+                story_count=0,
+                summary=result.get("summary"),
+                output_format=request.output_format or "json",
+                stories=[],
+                error=result["error"],
+            )
+
+        from ...core.config import settings
+
+        return DecomposeResponse(
+            thread_id=result.get("thread_id", ""),
+            story_count=result.get("story_count", 0),
+            summary=result.get("summary"),
+            output_format=result.get("output_format", "json"),
+            stories=result.get("stories", []),
+            formatted_output=result.get("formatted_output"),
+            recommendations=result.get("recommendations", []),
+            error=result.get("error"),
+            usage=result.get("usage"),
+            jira_base_url=settings.JIRA_URL,
+            is_locked=result.get("is_locked", False),
+        )
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/decompose", response_model=DecomposeResponse)

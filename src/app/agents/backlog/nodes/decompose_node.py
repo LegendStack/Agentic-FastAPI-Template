@@ -266,12 +266,12 @@ class DecomposeNode:
 
         # Build context from reference stories
         context = epic.context or ""
-        
+
         # Add enriched context from Jira entity extraction (Phase 5)
         if enriched_context:
             context += "\n\n" + enriched_context
             logger.info("DecomposeNode: Enriched context added (%d chars)", len(enriched_context))
-        
+
         if reference_stories:
             context += "\n\n### Reference Examples from Past Stories:\n"
             for s in reference_stories:
