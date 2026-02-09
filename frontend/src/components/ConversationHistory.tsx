@@ -123,49 +123,14 @@ export const ConversationHistory = ({
         mutationFn: async (threadId: string) => {
             await api.delete(`/agents/conversations/${threadId}`);
         },
-        onMutate: async (threadId) => {
-            // Cancel any outgoing refetches
-            await queryClient.cancelQueries({ queryKey: ['conversations', 'backlog_assistant'] });
-
-            // Snapshot the previous value
-            const previousConversations = queryClient.getQueryData<Conversation[]>(['conversations', 'backlog_assistant']);
-
-            // Optimistically update to the new value
-            if (previousConversations) {
-                queryClient.setQueryData<Conversation[]>(['conversations', 'backlog_assistant'], (old) =>
-                    old ? old.filter((c) => c.thread_id !== threadId) : []
-                );
-            }
-
-            // Return a context object with the snapshotted value
-            return { previousConversations };
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['conversations', 'backlog_assistant'] });
+            toast.success('Conversation deleted');
         },
-        onSuccess: (_, threadId, context) => {
-            toast.success('Conversation deleted', {
-                description: 'You can restore it if this was a mistake.',
-                action: {
-                    label: 'Undo',
-                    onClick: () => {
-                        restoreMutation.mutate(threadId);
-                        // Optimistically restore? Optional, but safer to let restoreMutation handle it
-                        // For now, let's just trigger the restore mutation
-                    }
-                },
-                duration: 5000,
-            });
-        },
-        onError: (err, newTodo, context) => {
-            // If the mutation fails, use the context returned from onMutate to roll back
-            if (context?.previousConversations) {
-                queryClient.setQueryData(['conversations', 'backlog_assistant'], context.previousConversations);
-            }
+        onError: (err) => {
             toast.error('Failed to delete conversation');
             console.error('Delete failed:', err);
-        },
-        onSettled: () => {
-            // Always refetch after error or success:
-            queryClient.invalidateQueries({ queryKey: ['conversations', 'backlog_assistant'] });
-        },
+        }
     });
 
     const handleStartEdit = (e: React.MouseEvent, conv: Conversation) => {
