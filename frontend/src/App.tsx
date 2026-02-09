@@ -307,12 +307,6 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={handleNewConversation}
-                  className="text-[10px] font-bold text-text-secondary hover:text-text-primary transition-colors"
-                >
-                  Reset
-                </button>
               </header>
 
               <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
