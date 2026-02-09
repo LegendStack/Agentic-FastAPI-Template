@@ -250,9 +250,14 @@ export const ConversationHistory = ({
                                                                                 </button>
                                                                                 <button
                                                                                     onClick={(e) => handleDelete(e, conv.thread_id)}
-                                                                                    className="p-1 hover:text-red-400 text-text-tertiary transition-colors"
+                                                                                    disabled={deleteMutation.isPending}
+                                                                                    className={`p-1 hover:text-red-400 text-text-tertiary transition-colors ${deleteMutation.isPending && deleteMutation.variables === conv.thread_id ? 'opacity-100' : ''}`}
                                                                                 >
-                                                                                    <Trash2 className="w-3 h-3" />
+                                                                                    {deleteMutation.isPending && deleteMutation.variables === conv.thread_id ? (
+                                                                                        <div className="w-3 h-3 border-2 border-text-tertiary border-t-transparent rounded-full animate-spin" />
+                                                                                    ) : (
+                                                                                        <Trash2 className="w-3 h-3" />
+                                                                                    )}
                                                                                 </button>
                                                                             </div>
                                                                         </div>

@@ -163,35 +163,6 @@ class IntentNode:
             logger.info("IntentNode: Quick match for GROOM intent")
             return {"detected_intent": UserIntent.GROOM.value}
 
-        # If first message with substantial content OR has entities, likely decompose
-        if is_first and (len(user_message) > 50 or has_entities):
-            logger.info("IntentNode: First message with content or entities, defaulting to DECOMPOSE")
-            return {"detected_intent": UserIntent.DECOMPOSE.value}
-
-        # Enhance indicators - specific story mentioned with enhancement request
-        enhance_patterns = [
-            "story 1",
-            "story 2",
-            "story 3",
-            "story-",
-            "#1",
-            "#2",
-            "#3",
-            "first story",
-            "second story",
-            "third story",
-            "add acceptance",
-            "add edge case",
-            "add bdd",
-            "add technical",
-            "enhance story",
-            "improve story",
-            "update story",
-        ]
-        if has_stories and any(pattern in lower_message for pattern in enhance_patterns):
-            logger.info("IntentNode: Quick match for ENHANCE intent (specific story)")
-            return {"detected_intent": UserIntent.ENHANCE.value}
-
         # If not first and has stories, likely refine (general)
         if not is_first and has_stories:
             logger.info("IntentNode: Has stories and not first message, defaulting to REFINE")

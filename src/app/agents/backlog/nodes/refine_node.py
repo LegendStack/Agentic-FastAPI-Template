@@ -74,7 +74,13 @@ class RefineNode:
                 result = await self._mock_refine(current_result, feedback)
                 usage = {}
             else:
-                result, usage = await self._llm_refine(current_result, feedback)
+                result, usage = await self._llm_refine(
+                    current_result, 
+                    feedback, 
+                    edit_context=state.get("edit_context") or "",
+                    enriched_context=state.get("enriched_context") or "",
+                    story_template=state.get("story_template", self.config.STORY_TEMPLATE)
+                )
 
             logger.info(f"RefineNode: Updated to {len(result.stories)} stories")
 
@@ -209,6 +215,9 @@ class RefineNode:
         self,
         current_result: DecompositionResult,
         feedback: str,
+        edit_context: str = "",
+        enriched_context: str = "",
+        story_template: str = "standard",
     ) -> tuple[DecompositionResult, dict[str, Any]]:
         """Use LLM to refine the decomposition."""
         if not self.llm_service:
@@ -219,16 +228,11 @@ class RefineNode:
         project_key = current_result.epic.project_key if current_result.epic else None
         
         # Combine contexts
-        edit_context = state.get("edit_context") or ""
-        enriched_context = state.get("enriched_context") or ""
-        
         full_context = ""
         if edit_context:
             full_context += f"Context from Manual Edits:\n{edit_context}\n\n"
         if enriched_context:
             full_context += f"Context from Jira:\n{enriched_context}\n\n"
-
-        story_template = state.get("story_template", self.config.STORY_TEMPLATE)
 
         system_prompt = get_refine_system_prompt(current_json, story_template=story_template, project_key=project_key)
         user_prompt = get_refine_user_prompt(feedback, edit_context=full_context.strip())

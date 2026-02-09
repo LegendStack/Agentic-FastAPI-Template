@@ -569,6 +569,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                         thread_id=thread_id,
                         agent_name="backlog_assistant",
                         title=title,
+                        user_id=int(user_id) if user_id and user_id.isdigit() else None,
                     )
                 elif is_first:
                     # If this is effectively a first message (even if thread existed)
@@ -669,7 +670,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
         try:
             # Only log if it was a refinement (not first message) and we have a user_id
             if not final_state.get("is_first_message", True) and (user_id or existing_state.get("user_id")):
-                from ...core.db.database import async_get_db
+                from ...core.db.database import AsyncSessionLocal
                 from ...services.audit_service import AuditService
 
                 # Resolve user_id if not passed directly
@@ -681,7 +682,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                     "project_key": project_key or final_state.get("project_key"),
                 }
 
-                async with async_get_db() as db:
+                async with AsyncSessionLocal() as db:
                     audit = AuditService(db)
                     await audit.log_event(
                         action="REFINEMENT",
@@ -877,6 +878,12 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                 conversation_service = ConversationService(self.checkpointer.db)
                 conv = await conversation_service.get_conversation(thread_id)
                 if conv:
+                    if conv.status == "archived":
+                        return {
+                            "thread_id": thread_id,
+                            "error": "Conversation is archived",
+                            "stories": [],
+                        }
                     metadata = conv.metadata_json or {}
 
             return {

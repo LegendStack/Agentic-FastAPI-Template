@@ -129,7 +129,7 @@ Your task is to analyze the user's message and classify their intent into ONE of
 6. When in doubt, prefer "help" over incorrectly triggering a workflow
 
 ## Output:
-Respond with ONLY the intent value (lowercase): decompose, refine, help, view, groom, or estimate
+Respond with ONLY the intent value (lowercase): decompose, decompose_to_epics, decompose_to_stories, decompose_to_tasks, decompose_to_subtasks, refine, enhance, help, view, groom, or estimate
 Do not include any other text."""
 
 

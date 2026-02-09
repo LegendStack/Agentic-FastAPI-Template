@@ -11,6 +11,8 @@ Endpoints:
 - POST /backlog/export/{thread_id} - Export to JIRA
 """
 
+import logging
+import uuid
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -527,6 +529,8 @@ async def get_stories(
             "is_locked": result.get("is_locked", False),
             "metadata": result.get("metadata", {}),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
 

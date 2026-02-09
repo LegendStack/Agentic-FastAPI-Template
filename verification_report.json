@@ -1,0 +1,65 @@
+[
+  {
+    "scenario": "Standard Decomposition",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 8.397127,
+    "thread_id": "68081eae-c29e-4c36-818f-4796c380a224",
+    "story_count": 5,
+    "error": null
+  },
+  {
+    "scenario": "Context-Aware Decomposition",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 1.357844,
+    "thread_id": "c2fdd9c4-a8ed-44ae-aaff-e8841e5c950d",
+    "story_count": 5,
+    "error": null
+  },
+  {
+    "scenario": "BDD Format Template",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 1.35191,
+    "thread_id": "eb90cb0b-513e-46c5-9b8d-d3edf215f980",
+    "story_count": 4,
+    "error": null
+  },
+  {
+    "scenario": "Toggle Off (No Edge Cases/Estimates)",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 3.347422,
+    "thread_id": "9c897833-863e-4dc9-bbc1-c2fb50acf397",
+    "story_count": 5,
+    "error": null
+  },
+  {
+    "scenario": "Door B Refinement (Direct Injection)",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 27.733554,
+    "thread_id": "dd0ec532-52b0-44b7-a280-27f31d550743",
+    "story_count": 3,
+    "error": null
+  },
+  {
+    "scenario": "Chat Thread Creation",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 1.713907,
+    "thread_id": "10b588ea-405f-4a1e-acf8-0736b78d0d5f",
+    "story_count": 5,
+    "error": null
+  },
+  {
+    "scenario": "Chat Refinement (Turn 2)",
+    "status": "\u2705 PASS",
+    "code": 200,
+    "duration": 66.906293,
+    "thread_id": "10b588ea-405f-4a1e-acf8-0736b78d0d5f",
+    "story_count": 5,
+    "error": null
+  }
+]

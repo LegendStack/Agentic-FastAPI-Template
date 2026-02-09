@@ -570,6 +570,7 @@ class ExportNode:
                             project_key=project_key,
                             story=story,
                             parent_epic_id=current_parent_epic_id,
+                            target_issue_type=state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE,
                         )
                         created_issues.append(issue)
                     except Exception as e:
@@ -695,12 +696,13 @@ class ExportNode:
         project_key: str,
         story: UserStory,
         parent_epic_id: str | None = None,
+        target_issue_type: str | None = None,
     ) -> dict[str, Any]:
         """Create a single JIRA issue."""
         # Start with standard fields
         fields = {
             "project": {"key": project_key},
-            "issuetype": {"name": state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE},
+            "issuetype": {"name": target_issue_type or self.config.JIRA_ISSUE_TYPE},
             "summary": story.title,
             "labels": (story.tags or []) + (self.config.DEFAULT_TAGS or []) + ["ai"],
         }
