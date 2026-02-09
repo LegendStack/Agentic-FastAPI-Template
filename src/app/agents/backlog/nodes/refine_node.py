@@ -101,35 +101,65 @@ class RefineNode:
         feedback_lower = feedback.lower()
         stories = list(current_result.stories)
 
+        # Try to find a target story ID in the feedback
+        target_story = None
+        target_index = -1
+        
+        # Simple heuristic: look for "story-XXX" or just "story X"
+        import re
+        id_match = re.search(r"story-?(\d+)", feedback_lower)
+        if id_match:
+            suffix = id_match.group(1).zfill(3)
+            search_id = f"STORY-{suffix}"
+            for i, s in enumerate(stories):
+                if s.id == search_id:
+                    target_story = s
+                    target_index = i
+                    break
+        
+        # Fallback: if no ID found, use last story
+        if not target_story and stories:
+            target_story = stories[-1]
+            target_index = len(stories) - 1
+
         # Simulate common refinement operations
         if "edge case" in feedback_lower or "edge cases" in feedback_lower:
-            # Add edge cases to all stories
-            for story in stories:
+            # Add edge cases to target story (or all if generic)
+            targets = [target_story] if target_story and "all" not in feedback_lower else stories
+            for story in targets:
                 if len(story.edge_cases) < 3:
                     story.edge_cases.append("Handle timeout scenario")
                     story.edge_cases.append("Handle concurrent access")
 
-        elif "split" in feedback_lower:
-            # Split the last story into two
-            if stories:
-                original = stories[-1]
-                new_id = f"STORY-{len(stories) + 1:03d}"
-                new_story = UserStory(
-                    id=new_id,
-                    title=f"{original.title} - Part 2",
-                    description=f"As a continuation of {original.id}, this covers additional aspects.",
-                    acceptance_criteria=[
-                        AcceptanceCriteria(description="Additional functionality works"),
-                        AcceptanceCriteria(description="Integration with Part 1 is seamless"),
-                    ],
-                    dependencies=[original.id],
-                    estimated_complexity="S",
-                    tags=original.tags,
-                )
-                stories.append(new_story)
+        elif "split" in feedback_lower and target_story:
+            # Split the target story
+            original = target_story
+            new_id_1 = f"{original.id}-A"
+            new_id_2 = f"{original.id}-B"
+            
+            part1 = UserStory(
+                id=new_id_1,
+                title=f"{original.title} - Part 1",
+                description=f"First part of {original.title}.",
+                acceptance_criteria=original.acceptance_criteria[:1],
+                estimated_complexity="S",
+                tags=original.tags,
+            )
+            part2 = UserStory(
+                id=new_id_2,
+                title=f"{original.title} - Part 2",
+                description=f"Second part of {original.title}.",
+                acceptance_criteria=original.acceptance_criteria[1:] if len(original.acceptance_criteria) > 1 else [AcceptanceCriteria(description="Additional criteria")],
+                estimated_complexity="S",
+                tags=original.tags,
+            )
+            # Remove original and insert new ones
+            stories.pop(target_index)
+            stories.insert(target_index, part2)
+            stories.insert(target_index, part1)
 
         elif "merge" in feedback_lower:
-            # Merge last two stories
+            # Merge last two stories (simplification for mock)
             if len(stories) >= 2:
                 story1 = stories[-2]
                 story2 = stories[-1]
@@ -165,8 +195,8 @@ class RefineNode:
         else:
             # Generic refinement - just add a note
             logger.info(f"RefineNode: Generic refinement applied for: {feedback[:50]}")
-            if stories:
-                stories[0].technical_notes.append(f"Refined based on: {feedback[:100]}")
+            if target_story:
+                target_story.technical_notes.append(f"Refined based on: {feedback[:100]}")
 
         return DecompositionResult(
             epic=current_result.epic,
@@ -187,11 +217,21 @@ class RefineNode:
         # Build prompts
         current_json = current_result.model_dump_json(indent=2)
         project_key = current_result.epic.project_key if current_result.epic else None
-        edit_context = state.get("edit_context")
+        
+        # Combine contexts
+        edit_context = state.get("edit_context") or ""
+        enriched_context = state.get("enriched_context") or ""
+        
+        full_context = ""
+        if edit_context:
+            full_context += f"Context from Manual Edits:\n{edit_context}\n\n"
+        if enriched_context:
+            full_context += f"Context from Jira:\n{enriched_context}\n\n"
+
         story_template = state.get("story_template", self.config.STORY_TEMPLATE)
 
         system_prompt = get_refine_system_prompt(current_json, story_template=story_template, project_key=project_key)
-        user_prompt = get_refine_user_prompt(feedback, edit_context=edit_context)
+        user_prompt = get_refine_user_prompt(feedback, edit_context=full_context.strip())
 
         # Use structured output validator with retry
         result_data, usage_metadata = await self.validator.with_retry(
