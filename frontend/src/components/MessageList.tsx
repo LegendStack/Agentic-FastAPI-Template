@@ -65,11 +65,11 @@ export const MessageList = ({ messages }: MessageListProps) => {
             ))}
 
             {/* Divider */}
-            <div className="flex items-center gap-4 my-4 opacity-20">
+            {/* <div className="flex items-center gap-4 my-4 opacity-20">
                 <div className="h-px flex-1 bg-border-primary" />
                 <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Generated Stories</span>
                 <div className="h-px flex-1 bg-border-primary" />
-            </div>
+            </div> */}
         </div>
     );
 };
