@@ -28,7 +28,7 @@ export const MessageList = ({ messages }: MessageListProps) => {
                     className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
                     <div className={`relative px-6 py-4 rounded-2xl transition-all group ${msg.role === 'user'
-                        ? 'max-w-[80%] bg-accent-primary/10 text-text-primary rounded-tr-none shadow-xl backdrop-blur-md border border-accent-primary/20'
+                        ? 'max-w-[80%] bg-bg-secondary text-text-primary rounded-tr-none'
                         : 'w-full bg-transparent text-text-primary rounded-tl-none border-b border-border-primary/30 pb-8'
                         }`}>
                         <div className="relative">

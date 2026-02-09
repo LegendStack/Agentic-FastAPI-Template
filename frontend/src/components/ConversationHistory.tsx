@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Plus, Pencil, Trash2, Check, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X } from 'lucide-react';
 import api from '../api/client';
 import { useState } from 'react';
 
@@ -180,14 +180,10 @@ export const ConversationHistory = ({
                                                 exit={{ opacity: 0, x: -10 }}
                                                 onClick={() => onSelectThread(conv.thread_id)}
                                                 className={`w-full flex items-start rounded-lg transition-all text-left mb-1 group/item cursor-pointer ${currentThreadId === conv.thread_id
-                                                    ? 'bg-accent-primary/10 border border-accent-primary/30'
-                                                    : 'hover:bg-bg-tertiary border border-transparent'
-                                                    } ${isMinimized ? 'p-2 justify-center' : 'gap-3 px-3 py-2.5'}`}
+                                                    ? 'bg-accent-primary/10 shadow-sm'
+                                                    : 'hover:bg-bg-tertiary'
+                                                    } ${isMinimized ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
                                             >
-                                                <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isMinimized ? '' : 'mt-0.5'} ${currentThreadId === conv.thread_id
-                                                    ? 'text-accent-primary'
-                                                    : 'text-text-secondary'
-                                                    }`} />
                                                 {!isMinimized && (
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -210,44 +206,48 @@ export const ConversationHistory = ({
                                                                 </div>
                                                             ) : (
                                                                 <>
-                                                                    <p className={`text-xs font-semibold truncate ${currentThreadId === conv.thread_id
-                                                                        ? 'text-accent-primary'
-                                                                        : 'text-text-primary'
-                                                                        }`}>
-                                                                        {conv.title || 'Untitled Chat'}
-                                                                    </p>
-                                                                    <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                                        <button
-                                                                            onClick={(e) => handleStartEdit(e, conv)}
-                                                                            className="p-1 hover:text-accent-primary text-text-tertiary transition-colors"
-                                                                        >
-                                                                            <Pencil className="w-3 h-3" />
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={(e) => handleDelete(e, conv.thread_id)}
-                                                                            className="p-1 hover:text-red-400 text-text-tertiary transition-colors"
-                                                                        >
-                                                                            <Trash2 className="w-3 h-3" />
-                                                                        </button>
+                                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                                        <p className={`text-xs font-semibold truncate mb-1.5 ${currentThreadId === conv.thread_id
+                                                                            ? 'text-accent-primary'
+                                                                            : 'text-text-primary'
+                                                                            }`}>
+                                                                            {conv.title || 'Untitled Chat'}
+                                                                        </p>
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                {conv.metadata?.project_key && (
+                                                                                    <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
+                                                                                        {conv.metadata.project_key}
+                                                                                    </span>
+                                                                                )}
+                                                                                <p className="text-[10px] text-text-secondary truncate">
+                                                                                    {formatRelativeTime(conv.updated_at || conv.created_at)}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
+                                                                                <button
+                                                                                    onClick={(e) => handleStartEdit(e, conv)}
+                                                                                    className="p-1 hover:text-accent-primary text-text-tertiary transition-colors"
+                                                                                >
+                                                                                    <Pencil className="w-3 h-3" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={(e) => handleDelete(e, conv.thread_id)}
+                                                                                    className="p-1 hover:text-red-400 text-text-tertiary transition-colors"
+                                                                                >
+                                                                                    <Trash2 className="w-3 h-3" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex items-center justify-between mt-0.5">
-                                                            <p className="text-[10px] text-text-secondary">
-                                                                {formatRelativeTime(conv.updated_at || conv.created_at)}
-                                                            </p>
-                                                            {conv.metadata?.project_key && !editingThreadId && (
-                                                                <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
-                                                                    {conv.metadata.project_key}
-                                                                </span>
                                                             )}
                                                         </div>
                                                     </div>
                                                 )}
                                                 {isMinimized && conv.metadata?.project_key && (
                                                     <span className="px-1.5 py-0.5 rounded-md bg-accent-primary/20 text-[9px] uppercase tracking-tighter text-accent-primary font-mono flex-shrink-0 font-bold">
-                                                        {conv.metadata.project_key}
+                                                        {conv.metadata.project_key[0]}
                                                     </span>
                                                 )}
                                             </motion.div>
