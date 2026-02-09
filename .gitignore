@@ -154,3 +154,6 @@ tests/*.log
 
 # Logs
 logs/
+
+# Frontend
+frontend/
