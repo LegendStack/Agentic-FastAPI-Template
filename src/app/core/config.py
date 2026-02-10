@@ -272,6 +272,11 @@ class AISettings(BaseSettings):
     # Jira Epic Configuration
     JIRA_EPIC_ISSUE_TYPE: str = "Epic"
     JIRA_EPIC_NAME_FIELD: str | None = "customfield_10011"
+    JIRA_EPIC_LINK_FIELD: str | None = "customfield_10014"
+
+    # Jira Compatibility
+    JIRA_API_VERSION: int = 3  # 3 for Cloud, 2 for Data Center
+    JIRA_USE_ADF: bool = True  # True for Cloud, False for Data Center
 
     # Confluence (Optional)
     CONFLUENCE_URL: str | None = None

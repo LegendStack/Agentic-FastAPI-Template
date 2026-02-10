@@ -215,11 +215,15 @@ class ExportNode:
 
     def _validate_jira_config(self) -> bool:
         """Check if JIRA configuration is complete."""
-        return bool(
-            getattr(settings, "JIRA_URL", None)
-            and getattr(settings, "JIRA_USERNAME", None)
-            and getattr(settings, "JIRA_API_TOKEN", None)
-        )
+        has_url = bool(getattr(settings, "JIRA_URL", None))
+        has_token = bool(getattr(settings, "JIRA_API_TOKEN", None))
+
+        # Username is only strictly required for BASIC auth, not for PAT
+        auth_mode = getattr(settings, "JIRA_AUTH_MODE", "basic")
+        if auth_mode == "pat":
+            return has_url and has_token
+
+        return has_url and has_token and bool(getattr(settings, "JIRA_USERNAME", None))
 
     async def _mock_export(self, result: DecompositionResult, state: BacklogAgentState) -> dict[str, Any]:
         """Generate mock export result for testing."""

@@ -41,10 +41,10 @@ class ConfluenceIndexer(BaseIndexer):
     def __init__(
         self,
         vector_store: BaseVectorStore,
-        llm_service,  # LLMService for embeddings
-        base_url: str,
-        username: str,
-        api_token: str,
+        llm_service,
+        base_url: str | None = None,
+        username: str | None = None,
+        api_token: str | None = None,
         spaces: list[str] | None = None,
         tenant_id: str | None = None,
         include_attachments: bool = False,
@@ -52,11 +52,26 @@ class ConfluenceIndexer(BaseIndexer):
     ):
         self.vector_store = vector_store
         self.llm = llm_service
-        self.base_url = base_url.rstrip("/")
-        self.username = username
-        self.api_token = api_token
-        self.auth_mode = getattr(settings, "CONFLUENCE_AUTH_MODE", "basic").lower()
-        self.spaces = spaces
+        
+        # Load from settings if not provided
+        self.base_url = (base_url or settings.CONFLUENCE_URL or "").rstrip("/")
+        self.username = username or settings.CONFLUENCE_USERNAME or ""
+        
+        token_val = api_token or (settings.CONFLUENCE_API_TOKEN.get_secret_value() if settings.CONFLUENCE_API_TOKEN else "")
+        self.api_token = token_val
+        
+        auth_mode_env = getattr(settings, "CONFLUENCE_AUTH_MODE", "basic").lower()
+        self.auth_mode = auth_mode_env
+        
+        # Auto-detect Cloud and correct auth mode
+        if "atlassian.net" in self.base_url.lower() and self.auth_mode == "pat":
+            logger.warning(
+                "ConfluenceIndexer: 'pat' auth mode detected for Atlassian Cloud. "
+                "Switching to 'basic' auth (API Token)."
+            )
+            self.auth_mode = "basic"
+
+        self.spaces = spaces or settings.CONFLUENCE_SPACES
         self.tenant_id = tenant_id
         self.include_attachments = include_attachments
         self.max_pages = max_pages

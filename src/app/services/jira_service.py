@@ -77,6 +77,36 @@ class JiraConfig:
     epic_link_field: str | None = "customfield_10014"
     parent_field: str | None = "parent"  # Next-gen projects use this
 
+    # Jira Compatibility
+    api_version: int = 3
+    use_adf: bool = True
+
+    def format_description(self, description: str) -> str | dict[str, Any]:
+        """Format description based on Jira version/settings."""
+        if self.use_adf:
+            # Jira Cloud uses ADF format (JSON)
+            # Better to split by newlines for real paragraphs
+            paragraphs = []
+            for line in description.split("\n"):
+                if line.strip():
+                    paragraphs.append(
+                        {
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": line.strip()}],
+                        }
+                    )
+
+            if not paragraphs:
+                paragraphs = [{"type": "paragraph", "content": [{"type": "text", "text": description}]}]
+
+            return {
+                "type": "doc",
+                "version": 1,
+                "content": paragraphs,
+            }
+        # Jira Data Center uses plain text/Wiki Markup
+        return description
+
     # Retry configuration
     max_retries: int = 3
     retry_delay_seconds: float = 1.0
@@ -90,14 +120,31 @@ class JiraConfig:
         if not settings.JIRA_API_TOKEN:
             raise JiraConfigurationError("JIRA_API_TOKEN is not configured")
 
+        auth_mode_env = settings.JIRA_AUTH_MODE.lower() if settings.JIRA_AUTH_MODE else "basic"
+        auth_mode = AuthMode(auth_mode_env)
+
+        # Auto-detect Cloud and correct auth mode
+        if (
+            "atlassian.net" in settings.JIRA_URL.lower() 
+            and auth_mode == AuthMode.PAT
+        ):
+            logger.warning(
+                "JiraConfig: 'pat' auth mode detected for Atlassian Cloud. "
+                "Switching to 'basic' auth (API Token)."
+            )
+            auth_mode = AuthMode.BASIC
+
         return cls(
-            base_url=settings.JIRA_URL.rstrip("/"),
+            base_url=f"{settings.JIRA_URL.rstrip('/')}/",  # Ensure trailing slash for httpx
             username=settings.JIRA_USERNAME or "",
             api_token=settings.JIRA_API_TOKEN.get_secret_value(),
-            auth_mode=AuthMode(settings.JIRA_AUTH_MODE) if settings.JIRA_AUTH_MODE else AuthMode.BASIC,
+            auth_mode=auth_mode,
             default_project_key=settings.JIRA_PROJECTS[0] if settings.JIRA_PROJECTS else None,
             epic_issue_type=settings.JIRA_EPIC_ISSUE_TYPE,
             epic_name_field=settings.JIRA_EPIC_NAME_FIELD,
+            epic_link_field=settings.JIRA_EPIC_LINK_FIELD,
+            api_version=settings.JIRA_API_VERSION,
+            use_adf=settings.JIRA_USE_ADF,
         )
 
     @property
@@ -315,24 +362,23 @@ class CreateIssuePayload:
         }
 
         if self.description:
-            # Jira Cloud uses ADF format for description
-            fields["description"] = {
-                "type": "doc",
-                "version": 1,
-                "content": [
-                    {
-                        "type": "paragraph",
-                        "content": [{"type": "text", "text": self.description}],
-                    }
-                ],
-            }
+            fields["description"] = config.format_description(self.description)
 
         if self.labels:
-            fields["labels"] = self.labels
+            # Sanitize: Jira labels cannot contain spaces
+            fields["labels"] = [l.replace(" ", "_").replace("-", "_") for l in self.labels]
 
-        # Handle parent linking (next-gen projects)
+        # Handle parent linking
         if self.parent_key:
-            fields["parent"] = {"key": self.parent_key}
+            if config.api_version == 3:
+                # Cloud v3: Next-gen uses 'parent', Classic uses 'Epic Link'
+                # We prioritize 'parent' but will fallback in JiraService if it fails
+                fields["parent"] = {"key": self.parent_key}
+                if config.epic_link_field:
+                     fields[config.epic_link_field] = self.parent_key
+            elif config.epic_link_field:
+                # Data Center / Server v2 uses Epic Link custom field
+                fields[config.epic_link_field] = self.parent_key
 
         # Add custom fields
         for field_id, value in self.custom_fields.items():
@@ -359,19 +405,11 @@ class CreateEpicPayload:
         }
 
         if self.description:
-            fields["description"] = {
-                "type": "doc",
-                "version": 1,
-                "content": [
-                    {
-                        "type": "paragraph",
-                        "content": [{"type": "text", "text": self.description}],
-                    }
-                ],
-            }
+            fields["description"] = config.format_description(self.description)
 
         if self.labels:
-            fields["labels"] = self.labels
+            # Sanitize: Jira labels cannot contain spaces
+            fields["labels"] = [l.replace(" ", "_").replace("-", "_") for l in self.labels]
 
         # Add Epic Name field if configured
         if config.epic_name_field:
@@ -563,7 +601,7 @@ class JiraService:
         """
         logger.info(f"JiraService: Getting issue {key}")
 
-        result = await self._request("GET", f"/rest/api/3/issue/{key}")
+        result = await self._request("GET", f"rest/api/{self.config.api_version}/issue/{key}")
 
         if result.is_ok:
             issue = JiraIssue.from_api_response(result.value, self.config.base_url)
@@ -582,17 +620,48 @@ class JiraService:
         Returns:
             Result containing the new issue key or error
         """
-        logger.info(f"JiraService: Creating {payload.issue_type} in {payload.project_key}")
+        logger.info(
+            f"JiraService: Creating {payload.issue_type} in {payload.project_key}"
+        )
 
         jira_payload = payload.to_jira_payload(self.config)
-        result = await self._request("POST", "/rest/api/3/issue", json=jira_payload)
+        result = await self._request("POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload)
+
+        # Resilient Linking Fix: If 400 error on Cloud, it might be a Classic vs Next-gen mismatch
+        if (
+            result.is_error
+            and result.error.code == JiraErrorCode.VALIDATION_ERROR
+            and self.config.api_version == 3
+        ):
+            # Check if it's a parent field rejection
+            error_text = str(result.error.details)
+            if "parent" in error_text or "Field 'parent' cannot be set" in error_text:
+                logger.warning("JiraService: 'parent' field rejected, retrying with Epic Link only")
+                if "parent" in jira_payload["fields"]:
+                    del jira_payload["fields"]["parent"]
+                    # Epic Link should already be in payload from to_jira_payload if configured
+                    result = await self._request(
+                        "POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload
+                    )
+            elif self.config.epic_link_field and self.config.epic_link_field in error_text:
+                logger.warning(f"JiraService: '{self.config.epic_link_field}' rejected, retrying with parent only")
+                if self.config.epic_link_field in jira_payload["fields"]:
+                    del jira_payload["fields"][self.config.epic_link_field]
+                    result = await self._request(
+                        "POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload
+                    )
 
         if result.is_ok:
             key = result.value.get("key", "")
             logger.info(f"JiraService: Created issue {key}")
             return Result.ok(key)
 
-        logger.error(f"JiraService: Failed to create issue: {result.error}")
+        logger.error(
+            f"JiraService: Failed to create issue. Status: {result.error.status_code}, "
+            f"Error: {result.error.message}"
+        )
+        if result.error.details:
+            logger.error(f"JiraService: Error details: {result.error.details}")
         return Result.err(result.error)
 
     async def create_epic(self, payload: CreateEpicPayload) -> Result[str]:
@@ -610,7 +679,7 @@ class JiraService:
         logger.info(f"JiraService: Creating Epic in {payload.project_key}")
 
         jira_payload = payload.to_jira_payload(self.config)
-        result = await self._request("POST", "/rest/api/3/issue", json=jira_payload)
+        result = await self._request("POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload)
 
         if result.is_ok:
             key = result.value.get("key", "")
@@ -621,7 +690,7 @@ class JiraService:
         if result.error.code == JiraErrorCode.VALIDATION_ERROR and self.config.epic_name_field:
             logger.warning("JiraService: Retrying Epic creation without Epic Name field")
             del jira_payload["fields"][self.config.epic_name_field]
-            result = await self._request("POST", "/rest/api/3/issue", json=jira_payload)
+            result = await self._request("POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload)
 
             if result.is_ok:
                 key = result.value.get("key", "")
@@ -644,7 +713,11 @@ class JiraService:
         """
         logger.info(f"JiraService: Updating issue {key}")
 
-        result = await self._request("PUT", f"/rest/api/3/issue/{key}", json={"fields": fields})
+        # Format description if present
+        if "description" in fields and isinstance(fields["description"], str):
+            fields["description"] = self.config.format_description(fields["description"])
+
+        result = await self._request("PUT", f"rest/api/{self.config.api_version}/issue/{key}", json={"fields": fields})
 
         if result.is_ok:
             logger.info(f"JiraService: Updated issue {key}")
@@ -672,7 +745,7 @@ class JiraService:
             "fields": ["summary", "description", "status", "issuetype", "priority", "labels", "parent", "project"],
         }
 
-        result = await self._request("POST", "/rest/api/3/search/jql", json=payload)
+        result = await self._request("POST", f"rest/api/{self.config.api_version}/search/jql", json=payload)
 
         if result.is_ok:
             issues = [
@@ -694,7 +767,7 @@ class JiraService:
             Result containing project data or error
         """
         logger.info(f"JiraService: Getting project {key}")
-        return await self._request("GET", f"/rest/api/3/project/{key}")
+        return await self._request("GET", f"rest/api/{self.config.api_version}/project/{key}")
 
     async def bulk_create_issues(
         self,
@@ -719,7 +792,7 @@ class JiraService:
         issues = [p.to_jira_payload(self.config) for p in payloads]
         result = await self._request(
             "POST",
-            "/rest/api/3/issue/bulk",
+            f"rest/api/{self.config.api_version}/issue/bulk",
             json={"issueUpdates": issues},
         )
 
@@ -752,7 +825,7 @@ class JiraService:
 
         result = await self._request(
             "GET",
-            "/rest/api/3/issue/createmeta",
+            f"rest/api/{self.config.api_version}/issue/createmeta",
             params={"projectKeys": project_key, "expand": "projects.issuetypes.fields"},
         )
 
@@ -784,7 +857,7 @@ class JiraService:
         # First, get available transitions
         transitions_result = await self._request(
             "GET",
-            f"/rest/api/3/issue/{key}/transitions",
+            f"rest/api/{self.config.api_version}/issue/{key}/transitions",
         )
 
         if transitions_result.is_error:
@@ -810,7 +883,7 @@ class JiraService:
         # Execute the transition
         result = await self._request(
             "POST",
-            f"/rest/api/3/issue/{key}/transitions",
+            f"rest/api/{self.config.api_version}/issue/{key}/transitions",
             json={"transition": {"id": target["id"]}},
         )
 
@@ -834,7 +907,7 @@ class JiraService:
 
         result = await self._request(
             "GET",
-            f"/rest/api/3/project/{project_key}",
+            f"rest/api/{self.config.api_version}/project/{project_key}",
         )
 
         if result.is_ok:
