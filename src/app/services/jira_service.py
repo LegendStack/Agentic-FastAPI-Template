@@ -41,6 +41,7 @@ from typing import Any, Generic, TypeVar
 import httpx
 
 from ..core.config import settings
+from ..core.credentials import AuthMode
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class JiraConfig:
     base_url: str
     username: str
     api_token: str
+    auth_mode: AuthMode = AuthMode.BASIC
     default_project_key: str | None = None
 
     # Issue type names (may vary per Jira instance)
@@ -92,15 +94,18 @@ class JiraConfig:
             base_url=settings.JIRA_URL.rstrip("/"),
             username=settings.JIRA_USERNAME or "",
             api_token=settings.JIRA_API_TOKEN.get_secret_value(),
+            auth_mode=AuthMode(settings.JIRA_AUTH_MODE) if settings.JIRA_AUTH_MODE else AuthMode.BASIC,
             default_project_key=settings.JIRA_PROJECTS[0] if settings.JIRA_PROJECTS else None,
             epic_issue_type=settings.JIRA_EPIC_ISSUE_TYPE,
             epic_name_field=settings.JIRA_EPIC_NAME_FIELD,
         )
 
     @property
-    def auth(self) -> tuple[str, str]:
-        """Get auth tuple for httpx."""
-        return (self.username, self.api_token)
+    def auth(self) -> tuple[str, str] | None:
+        """Get auth tuple for httpx (only for Basic auth)."""
+        if self.auth_mode == AuthMode.BASIC:
+            return (self.username, self.api_token)
+        return None
 
     @property
     def is_configured(self) -> bool:
@@ -403,11 +408,20 @@ class JiraService:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
         if self._client is None or self._client.is_closed:
+            headers = {"Content-Type": "application/json"}
+            auth = None
+
+            if self.config.auth_mode == AuthMode.PAT:
+                # Jira Data Center PATs are Bearer tokens
+                headers["Authorization"] = f"Bearer {self.config.api_token}"
+            elif self.config.auth_mode == AuthMode.BASIC:
+                auth = self.config.auth
+
             self._client = httpx.AsyncClient(
                 base_url=self.config.base_url,
-                auth=self.config.auth,
+                auth=auth,
                 timeout=self.config.request_timeout_seconds,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
             )
         return self._client
 

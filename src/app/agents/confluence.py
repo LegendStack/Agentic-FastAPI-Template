@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from ..core.config import settings
 from .base import BaseIndexer, BaseVectorStore
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ class ConfluenceIndexer(BaseIndexer):
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.api_token = api_token
+        self.auth_mode = getattr(settings, "CONFLUENCE_AUTH_MODE", "basic").lower()
         self.spaces = spaces
         self.tenant_id = tenant_id
         self.include_attachments = include_attachments
@@ -67,13 +69,19 @@ class ConfluenceIndexer(BaseIndexer):
         except ImportError:
             raise ImportError("httpx required. Install with: pip install httpx")
 
-        auth = (self.username, self.api_token)
+        auth = None
+        headers = {"Content-Type": "application/json"}
+
+        if self.auth_mode == "pat":
+            headers["Authorization"] = f"Bearer {self.api_token}"
+        else:
+            auth = (self.username, self.api_token)
 
         pages = []
         start = 0
         limit = 50
 
-        async with httpx.AsyncClient(auth=auth) as client:
+        async with httpx.AsyncClient(auth=auth, headers=headers) as client:
             while len(pages) < self.max_pages:
                 # Build CQL query
                 cql = "type=page"

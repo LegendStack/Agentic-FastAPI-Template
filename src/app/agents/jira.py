@@ -11,7 +11,7 @@ import logging
 from typing import Any
 
 from ..core.config import settings
-from ..services.jira_service import JiraService, JiraConfig
+from ..services.jira_service import JiraConfig, JiraService
 from .azure_openai import LLMService
 from .base import BaseIndexer, BaseVectorStore
 
@@ -36,7 +36,7 @@ class JiraIndexer(BaseIndexer):
     ):
         self.vector_store = vector_store
         self.llm_service = llm_service
-        
+
         # Use injected service or create one from settings
         if jira_service:
             self._jira_service = jira_service

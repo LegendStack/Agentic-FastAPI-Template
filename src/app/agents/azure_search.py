@@ -6,10 +6,11 @@ Provides the alternative vector store backend for production deployments.
 import logging
 from typing import Any
 
+from ..core.config import settings
+from ..core.credentials import ApiKeyProvider, AzureManagedIdentityProvider, OAuth2ClientCredentialsProvider
 from .base import BaseVectorStore
 
 logger = logging.getLogger(__name__)
-
 
 class AzureAISearchStore(BaseVectorStore):
     """
@@ -18,23 +19,82 @@ class AzureAISearchStore(BaseVectorStore):
     semantic ranking, and hybrid search capabilities.
     """
 
-    def __init__(self, endpoint: str, api_key: str, index_name: str = "agent-index", embedding_dimension: int = 1536):
+    def __init__(
+        self,
+        endpoint: str,
+        api_key: str | None = None,
+        index_name: str = "agent-index",
+        embedding_dimension: int = 1536,
+    ):
         self.endpoint = endpoint
         self.api_key = api_key
+        self.auth_mode = settings.AZURE_SEARCH_AUTH_MODE.lower()
         self.index_name = index_name
         self.embedding_dimension = embedding_dimension
         self._client = None
         self._index_client = None
+        self._provider = None
+
+    def _get_provider(self):
+        """Get the appropriate credential provider for Azure Search."""
+        if self._provider is None:
+            resource = "https://search.azure.com/.default"
+
+            if self.auth_mode == "api_key":
+                if not self.api_key:
+                    raise ValueError("AZURE_SEARCH_KEY is required for api_key auth mode.")
+                self._provider = ApiKeyProvider(self.api_key)
+
+            elif self.auth_mode == "oauth2":
+                if not settings.AZURE_SEARCH_CLIENT_ID or not settings.AZURE_SEARCH_CLIENT_SECRET:
+                    raise ValueError("Client ID and Secret are required for Azure Search oauth2 auth mode.")
+
+                tenant_id = getattr(settings, "AZURE_TENANT_ID", "common")
+                token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+                self._provider = OAuth2ClientCredentialsProvider(
+                    client_id=settings.AZURE_SEARCH_CLIENT_ID,
+                    client_secret=settings.AZURE_SEARCH_CLIENT_SECRET.get_secret_value(),
+                    token_url=token_url,
+                    scope=resource
+                )
+
+            elif self.auth_mode == "managed_identity":
+                self._provider = AzureManagedIdentityProvider(
+                    resource=resource,
+                    client_id=settings.AZURE_SEARCH_CLIENT_ID
+                )
+            else:
+                raise ValueError(f"Unsupported Azure Search auth mode: {self.auth_mode}")
+
+        return self._provider
 
     async def _get_client(self):
         """Lazy initialization of the Azure Search client."""
         if self._client is None:
             try:
-                from azure.core.credentials import AzureKeyCredential
                 from azure.search.documents.aio import SearchClient
 
+                if self.auth_mode == "api_key":
+                    from azure.core.credentials import AzureKeyCredential
+                    credential = AzureKeyCredential(self.api_key)
+                else:
+                    # For token-based auth, we need to handle rotation
+                    # Azure SearchClient (aio) doesn't directly support a token provider function
+                    # like AzureChatOpenAI, so we'll fetch a fresh token if needed.
+                    creds = await self._get_provider().get_credentials()
+                    from azure.core.credentials import TokenCredential
+
+                    class StaticTokenCredential(TokenCredential):
+                        def __init__(self, token): self.token = token
+                        def get_token(self, *scopes, **kwargs): return self.token
+
+                    # NOTE: This implementation might need periodic client recreation if tokens expire
+                    # for long-lived processes, or we use a more sophisticated wrapper.
+                    credential = StaticTokenCredential(creds.token)
+
                 self._client = SearchClient(
-                    endpoint=self.endpoint, index_name=self.index_name, credential=AzureKeyCredential(self.api_key)
+                    endpoint=self.endpoint, index_name=self.index_name, credential=credential
                 )
             except ImportError:
                 raise ImportError(
@@ -47,11 +107,21 @@ class AzureAISearchStore(BaseVectorStore):
         """Lazy initialization of the Azure Search Index client."""
         if self._index_client is None:
             try:
-                from azure.core.credentials import AzureKeyCredential
                 from azure.search.documents.indexes.aio import SearchIndexClient
 
+                if self.auth_mode == "api_key":
+                    from azure.core.credentials import AzureKeyCredential
+                    credential = AzureKeyCredential(self.api_key)
+                else:
+                    creds = await self._get_provider().get_credentials()
+                    from azure.core.credentials import TokenCredential
+                    class StaticTokenCredential(TokenCredential):
+                        def __init__(self, token): self.token = token
+                        def get_token(self, *scopes, **kwargs): return self.token
+                    credential = StaticTokenCredential(creds.token)
+
                 self._index_client = SearchIndexClient(
-                    endpoint=self.endpoint, credential=AzureKeyCredential(self.api_key)
+                    endpoint=self.endpoint, credential=credential
                 )
             except ImportError:
                 raise ImportError(

@@ -12,6 +12,7 @@ Supports:
 
 import asyncio
 import logging
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -181,11 +182,15 @@ class OAuth2ClientCredentialsProvider(BaseCredentialProvider):
             data["resource"] = self._resource
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self._token_url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            response.raise_for_status()
-            token_data = response.json()
+            try:
+                response = await client.post(
+                    self._token_url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}
+                )
+                response.raise_for_status()
+                token_data = response.json()
+            except Exception as e:
+                logger.error(f"Failed to fetch OAuth2 token: {e}")
+                raise
 
         expires_in = token_data.get("expires_in", 3600)
         expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
@@ -208,10 +213,9 @@ class AzureManagedIdentityProvider(BaseCredentialProvider):
     Azure Managed Identity provider.
 
     Uses Azure.Identity for token acquisition. Works in:
-    - Azure VMs
-    - Azure App Service
-    - Azure Kubernetes Service (AKS)
-    - Azure Functions
+    - Azure CLI (local dev)
+    - Environment Variables (Service Principal)
+    - Azure VMs / App Service / AKS (Managed Identity)
     """
 
     def __init__(self, resource: str, client_id: str | None = None):
@@ -229,9 +233,10 @@ class AzureManagedIdentityProvider(BaseCredentialProvider):
     def _get_credential(self):
         if self._credential is None:
             try:
-                from azure.identity import ManagedIdentityCredential
+                from azure.identity import DefaultAzureCredential
 
-                self._credential = ManagedIdentityCredential(client_id=self._client_id)
+                # DefaultAzureCredential handles Managed Identity, CLI, and Env vars
+                self._credential = DefaultAzureCredential(managed_identity_client_id=self._client_id)
             except ImportError:
                 raise ImportError("azure-identity required. Install with: pip install azure-identity")
         return self._credential
@@ -243,13 +248,16 @@ class AzureManagedIdentityProvider(BaseCredentialProvider):
 
             credential = self._get_credential()
 
-            # Run sync token acquisition in thread pool
+            # Acquisition is usually blocking, but newer azure-identity supports async
+            # We'll use the sync version in an executor for safety across versions
             loop = asyncio.get_event_loop()
             token = await loop.run_in_executor(None, credential.get_token, self._resource)
 
-            self._token_cache = TokenInfo(access_token=token.token, expires_at=datetime.fromtimestamp(token.expires_on))
+            self._token_cache = TokenInfo(
+                access_token=token.token, expires_at=datetime.fromtimestamp(token.expires_on, tz=None)
+            )
 
-            logger.info(f"Fetched Managed Identity token for {self._resource}")
+            logger.info(f"Fetched Azure AD token for {self._resource}")
 
             return Credentials(auth_mode=AuthMode.MANAGED_IDENTITY, token=self._token_cache)
 
@@ -326,3 +334,39 @@ class AtlassianOAuth2Provider(BaseCredentialProvider):
 
     def get_auth_mode(self) -> AuthMode:
         return AuthMode.OAUTH2
+
+
+class AzureOpenAICredentialFactory:
+    """Factory for creating Azure OpenAI credential providers."""
+
+    @staticmethod
+    def get_provider(settings: typing.Any) -> BaseCredentialProvider:
+        """Get the appropriate provider based on settings."""
+        mode = settings.AZURE_OPENAI_AUTH_MODE.lower()
+        resource = "https://cognitiveservices.azure.com/.default"
+
+        if mode == "api_key":
+            if not settings.AZURE_OPENAI_API_KEY:
+                raise ValueError("AZURE_OPENAI_API_KEY is required for api_key auth mode.")
+            return ApiKeyProvider(settings.AZURE_OPENAI_API_KEY.get_secret_value())
+
+        elif mode == "oauth2":
+            if not settings.AZURE_OPENAI_CLIENT_ID or not settings.AZURE_OPENAI_CLIENT_SECRET:
+                raise ValueError("Client ID and Secret are required for oauth2 auth mode.")
+
+            # Construct token URL from tenant ID if available
+            tenant_id = getattr(settings, "AZURE_TENANT_ID", "common")
+            token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+            return OAuth2ClientCredentialsProvider(
+                client_id=settings.AZURE_OPENAI_CLIENT_ID,
+                client_secret=settings.AZURE_OPENAI_CLIENT_SECRET.get_secret_value(),
+                token_url=token_url,
+                scope=resource,
+            )
+
+        elif mode == "managed_identity":
+            return AzureManagedIdentityProvider(resource=resource, client_id=settings.AZURE_OPENAI_CLIENT_ID)
+
+        else:
+            raise ValueError(f"Unsupported Azure OpenAI auth mode: {mode}")

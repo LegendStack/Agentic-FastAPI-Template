@@ -75,8 +75,8 @@ class RefineNode:
                 usage = {}
             else:
                 result, usage = await self._llm_refine(
-                    current_result, 
-                    feedback, 
+                    current_result,
+                    feedback,
                     edit_context=state.get("edit_context") or "",
                     enriched_context=state.get("enriched_context") or "",
                     story_template=state.get("story_template", self.config.STORY_TEMPLATE)
@@ -110,7 +110,7 @@ class RefineNode:
         # Try to find a target story ID in the feedback
         target_story = None
         target_index = -1
-        
+
         # Simple heuristic: look for "story-XXX" or just "story X"
         import re
         id_match = re.search(r"story-?(\d+)", feedback_lower)
@@ -122,7 +122,7 @@ class RefineNode:
                     target_story = s
                     target_index = i
                     break
-        
+
         # Fallback: if no ID found, use last story
         if not target_story and stories:
             target_story = stories[-1]
@@ -142,7 +142,7 @@ class RefineNode:
             original = target_story
             new_id_1 = f"{original.id}-A"
             new_id_2 = f"{original.id}-B"
-            
+
             part1 = UserStory(
                 id=new_id_1,
                 title=f"{original.title} - Part 1",
@@ -226,7 +226,7 @@ class RefineNode:
         # Build prompts
         current_json = current_result.model_dump_json(indent=2)
         project_key = current_result.epic.project_key if current_result.epic else None
-        
+
         # Combine contexts
         full_context = ""
         if edit_context:

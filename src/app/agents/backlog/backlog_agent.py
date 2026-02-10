@@ -780,7 +780,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
                         epic_issue = next((i for i in issues if i.get("jira_key") == epic_key), None)
 
                     error_issues = export_result.get("errors", [])
-                    
+
                     # Filter out the Epic itself from the stories list for the summary
                     story_issues = [i for i in issues if i.get("internal_id") != "EPIC" and i.get("jira_key") != epic_key]
 

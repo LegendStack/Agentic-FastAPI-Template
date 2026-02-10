@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from ....core.config import settings
-from ....core.db.database import async_get_db, local_session
+from ....core.db.database import local_session
 from ...azure_openai import get_llm_service
 from ...vector_stores import VectorStoreFactory
 from ..config import BacklogAgentConfig

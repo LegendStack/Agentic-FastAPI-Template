@@ -131,7 +131,7 @@ class BacklogAnalyzer:
         """Find potentially duplicate stories using multiple similarity signals."""
         duplicates = []
         # Lower threshold to catch more potential issues (better to flag than miss)
-        threshold = 0.60 
+        threshold = 0.60
 
         for i, story1 in enumerate(stories):
             for story2 in stories[i + 1 :]:
@@ -154,10 +154,10 @@ class BacklogAnalyzer:
                 # If titles are identical (1.0), it's a dupe.
                 # If descriptions are identical (1.0), it's a dupe.
                 # If somewhat similar in both, it's a dupe.
-                
+
                 # We use a weighted mix, but allow strong individual signals to boost it
                 max_title = max(title_seq, title_jaccard)
-                
+
                 # Logic: If titles are very similar (>0.8), or desc is very similar (>0.8), or both are moderately similar
                 is_duplicate = False
                 reason = ""

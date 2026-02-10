@@ -11,7 +11,6 @@ Endpoints:
 - POST /backlog/export/{thread_id} - Export to JIRA
 """
 
-import logging
 import uuid
 from typing import Annotated, Any, Literal
 

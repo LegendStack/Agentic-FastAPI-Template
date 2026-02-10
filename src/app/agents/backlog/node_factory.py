@@ -23,6 +23,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ..azure_openai import get_llm_service
+
 if TYPE_CHECKING:
     from ...services.jira_service import JiraService
     from .config import BacklogAgentConfig
@@ -116,7 +118,7 @@ class NodeFactory:
             # Input processing
             input_node=InputNode(),
             entity_extraction_node=self._create_entity_extraction_node(EntityExtractionNode),
-            intent_node=IntentNode(llm=self.config.get_llm()),
+            intent_node=IntentNode(llm=get_llm_service()),
             # Core processing
             decompose_node=DecomposeNode(config=self.config),
             refine_node=RefineNode(config=self.config),

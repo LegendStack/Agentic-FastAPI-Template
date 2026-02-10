@@ -8,8 +8,7 @@ This node runs early in the graph to enable intelligent routing.
 import logging
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
+from ...azure_openai import LLMService
 from ..intents import UserIntent, get_intent_classification_prompt, get_valid_intents
 from ..state import BacklogAgentState
 
@@ -25,12 +24,12 @@ class IntentNode:
     workflow path (decompose, refine, help, groom, etc.).
     """
 
-    def __init__(self, llm: Any):
+    def __init__(self, llm: LLMService):
         """
         Initialize the Intent Classification Node.
 
         Args:
-            llm: The language model to use for classification.
+            llm: The LLM service instance to use for classification.
         """
         self.llm = llm
         self._system_prompt = get_intent_classification_prompt()
@@ -67,7 +66,6 @@ class IntentNode:
         # Check for existing stories - if they exist and user isn't providing new content,
         # they're likely refining
         has_stories = bool(state.get("stories"))
-        stories_count = len(state.get("stories", []))
         is_first = state.get("is_first_message", True)
         # Entity awareness
         entities = state.get("extracted_entities", [])
@@ -76,7 +74,8 @@ class IntentNode:
         lower_message = user_message.lower().strip()
 
         logger.info(
-            f"IntentNode: Checking message='{user_message[:50]}...' len={len(user_message)} is_first={is_first} has_stories={has_stories} has_entities={has_entities}"
+            f"IntentNode: Checking message='{user_message[:50]}...' "
+            f"is_first={is_first} has_stories={has_stories} has_entities={has_entities}"
         )
 
         # Help indicators - CHECK FIRST before any other logic
@@ -150,7 +149,8 @@ class IntentNode:
         view_match = any(pattern in lower_message for pattern in view_patterns)
 
         logger.info(
-            f"IntentNode: Heuristics - groom={groom_match}, view={view_match}, has_stories={has_stories}, entities={has_entities}"
+            f"IntentNode: Heuristics - groom={groom_match}, view={view_match}, "
+            f"has_stories={has_stories}, entities={has_entities}"
         )
 
         # View Intent (Retrieve details without decomposition)
@@ -171,11 +171,11 @@ class IntentNode:
         # Use LLM for ambiguous cases
         try:
             messages = [
-                SystemMessage(content=self._system_prompt),
-                HumanMessage(content=f"Classify this message:\n\n{user_message}"),
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": f"Classify this message:\n\n{user_message}"},
             ]
 
-            response = await self.llm.ainvoke(messages)
+            response = await self.llm.chat(messages)
             raw_intent = response.content.strip().lower()
 
             # Parse the response
