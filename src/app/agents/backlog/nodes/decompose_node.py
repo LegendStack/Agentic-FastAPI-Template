@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from ....core.config import settings
+from ....services.jira_service import JiraService
 from ...azure_openai import LLMService, get_llm_service
 from ...structured_output import StructuredOutputValidator
 from ...vector_stores import VectorStoreFactory
@@ -107,12 +108,11 @@ class DecomposeNode:
         self,
         config: BacklogAgentConfig | None = None,
         llm_service: LLMService | None = None,
+        jira_service: JiraService | None = None,
     ):
         self.config = config or BacklogAgentConfig()
-        # Double safety check: If use_mocks is not explicitly set to False in initialization,
-        # and we are in a factory or API context, ensure we respect the global override if provided.
-        # But here, we just want to be sure it's not unintentionally True.
         self.llm_service = llm_service or get_llm_service()
+        self.jira_service = jira_service
         self.validator = StructuredOutputValidator()
 
     async def __call__(self, state: BacklogAgentState) -> dict[str, Any]:
@@ -133,34 +133,107 @@ class DecomposeNode:
         if not parsed_epic:
             return {"error": "No parsed epic in state"}
 
-        # Convert from dict if needed
         if isinstance(parsed_epic, dict):
             parsed_epic = Epic.model_validate(parsed_epic)
+
+        awaiting_conf = state.get("awaiting_decomposition_confirmation")
+        is_first_message = state.get("is_first_message", True)
+        extracted_entities = state.get("extracted_entities", [])
+
+        logger.info(f"DEBUG: DecomposeNode - is_first={is_first_message}, awaiting_conf={awaiting_conf}, entities={len(extracted_entities)}")
+        logger.info(f"DEBUG: DecomposeNode - parsed_epic title='{parsed_epic.title}', desc_len={len(parsed_epic.description)}")
+        
+        if is_first_message and extracted_entities and awaiting_conf is None:
+            primary_entity = sorted(extracted_entities, key=lambda e: e.get("confidence", 0), reverse=True)[0]
+            if primary_entity.get("entity_type") == "issue" and primary_entity.get("hydrated_context"):
+                ctx = primary_entity.get("hydrated_context")
+                key = primary_entity.get("key")
+                logger.info(f"DecomposeNode: Flagging for interactive confirmation of {key}")
+                
+                # We return early with the story details and ask for confirmation
+                issue_link = self.jira_service.get_issue_link(key) if self.jira_service else key
+                summary = f"I found **{issue_link}**: {ctx.get('summary')}\n\n**Description:**\n{JiraService.description_to_text(ctx.get('description'))[:500]}...\n\nShould I proceed with decomposing this into tasks?"
+                
+                return {
+                    "summary": summary,
+                    "awaiting_decomposition_confirmation": True,
+                    "awaiting_confirmation_for": {
+                        "intent": state.get("detected_intent", UserIntent.DECOMPOSE.value),
+                        "key": key
+                    },
+                    "parent_epic_id": key,
+                    "project_key": key.split("-")[0] if "-" in key else None,
+                    "is_first_message": True  # Keep it as first message for next turn
+                }
 
         try:
             # 0. Initial parameters
             detected_intent = state.get("detected_intent", UserIntent.DECOMPOSE.value)
             target_level = "story"
             target_issue_type = self.config.JIRA_ISSUE_TYPE
+            
+            # PHASING: Retrieve hydrated entities for Level Awareness and Context Prioritization
+            extracted_entities = state.get("extracted_entities", [])
+            primary_entity = None
+            if extracted_entities:
+                # Use a safe sort that handles both dicts and objects (serialization check)
+                def get_conf(e):
+                    if isinstance(e, dict): return e.get("confidence", 0)
+                    return getattr(e, "confidence", 0)
+                primary_entity = sorted(extracted_entities, key=get_conf, reverse=True)[0]
+
+            # 1. Context Prioritization (Phase 4): Use hydrated context as source if user input is brief
+            def get_hydrated_ctx(e):
+                if not e: return None
+                if isinstance(e, dict): return e.get("hydrated_context")
+                return getattr(e, "hydrated_context", None)
+
+            ctx = get_hydrated_ctx(primary_entity)
+            epic_description_to_use = parsed_epic.description
+            
+            if ctx:
+                source_type = ctx.get("issuetype", "").lower() if isinstance(ctx, dict) else getattr(ctx, "issuetype", "").lower()
+                
+                # Pivot: Epic -> Story, Story -> Task (Level Awareness)
+                if source_type in ["story", "task", "improvement", "bug"]:
+                    logger.info(f"DecomposeNode: Level Awareness triggered. Source Type={source_type}. Pivoting to TASK level.")
+                    target_level = "task"
+                    target_issue_type = "Technical Task"
+                elif source_type == "epic":
+                    target_level = "story"
+                    target_issue_type = "Story"
+                
+                # Prioritize hydrated description
+                hydrated_desc_raw = ctx.get("description") if isinstance(ctx, dict) else getattr(ctx, "description", None)
+                hydrated_desc = JiraService.description_to_text(hydrated_desc_raw)
+                if len(epic_description_to_use) < 50 and hydrated_desc and len(hydrated_desc) > len(epic_description_to_use):
+                    logger.info("DecomposeNode: Prioritizing hydrated context description as requirements.")
+                    epic_description_to_use = hydrated_desc
+
+            # Create a temporary copy for processing
+            prompt_epic = Epic(
+                title=parsed_epic.title,
+                description=epic_description_to_use,
+                project_key=parsed_epic.project_key
+            )
 
             if self.config.USE_MOCKS:
-                result = await self._mock_decompose(parsed_epic)
+                result = await self._mock_decompose(prompt_epic)
                 usage = {}
             else:
                 # 1. Semantic Deduplication Check
-                duplicate_info = await self._check_duplicate_epic(parsed_epic)
+                duplicate_info = await self._check_duplicate_epic(prompt_epic)
                 if duplicate_info and self.config.PREVENT_DUPLICATE_DECOMPOSITION:
-                    logger.info(
-                        f"DecomposeNode: Semantic duplicate detected. Thread ID: {duplicate_info.get('thread_id')}"
-                    )
+                    logger.info(f"DecomposeNode: Semantic duplicate detected. Thread ID: {duplicate_info.get('thread_id')}")
 
                 # 2. Retrieve similar stories for context (Phase 13)
-                reference_stories = await self._retrieve_reference_stories(parsed_epic)
+                reference_stories = await self._retrieve_reference_stories(prompt_epic)
 
                 # 3. Get enriched context from entity extraction (Phase 5)
                 enriched_context = state.get("enriched_context", "")
 
-                # 4. LLM Decomposition with full context
+                # 5. LLM Decomposition with full context
+                # Allow explicit intent to override auto-level
                 if detected_intent == UserIntent.DECOMPOSE_TO_EPICS.value:
                     target_level = "epic"
                     target_issue_type = self.config.JIRA_EPIC_ISSUE_TYPE
@@ -169,14 +242,15 @@ class DecomposeNode:
                     target_issue_type = "Story"
                 elif detected_intent == UserIntent.DECOMPOSE_TO_TASKS.value:
                     target_level = "task"
-                    target_issue_type = "Task"
+                    target_issue_type = "Technical Task"
                 elif detected_intent == UserIntent.DECOMPOSE_TO_SUBTASKS.value:
                     target_level = "subtask"
                     target_issue_type = "Sub-task"
 
                 story_template = state.get("story_template", self.config.STORY_TEMPLATE)
+
                 result, usage = await self._llm_decompose(
-                    parsed_epic,
+                    prompt_epic,
                     target_level=target_level,
                     reference_stories=reference_stories,
                     story_template=story_template,
@@ -198,7 +272,7 @@ class DecomposeNode:
 
                 # Archive this epic for future deduplication
                 await self._archive_epic(parsed_epic, state.get("thread_id"))
-            return {
+            update_dict = {
                 "stories": result.stories if result else [],
                 "current_result": result,
                 "usage_metadata": usage,
@@ -207,6 +281,8 @@ class DecomposeNode:
                 "is_first_message": False,
                 "error": None,
             }
+            logger.info(f"DEBUG: DecomposeNode - returning {len(update_dict.get('stories', []))} stories")
+            return update_dict
 
         except Exception as e:
             return {"error": f"Decomposition failed: {str(e)}"}
@@ -336,8 +412,16 @@ class DecomposeNode:
             system_prompt=system_prompt,
         )
 
-        # Ensure epic is set correctly
-        result_data.epic = epic
+        # Merging: Preserve basic fields (IDs, key) but allow LLM to refine title/description/context
+        if result_data.epic:
+            result_data.epic.project_key = epic.project_key
+            # If the LLM didn't return a description, use the one we sent
+            if not result_data.epic.description or len(result_data.epic.description) < 10:
+                result_data.epic.description = epic.description
+            if not result_data.epic.title:
+                result_data.epic.title = epic.title
+        else:
+            result_data.epic = epic
 
         logger.debug(f"DecomposeNode: Raw result stories ID: {[s.id for s in result_data.stories]}")
 

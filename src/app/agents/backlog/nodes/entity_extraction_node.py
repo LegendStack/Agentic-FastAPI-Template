@@ -13,6 +13,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from ....services.jira_service import JiraService
+
 logger = logging.getLogger(__name__)
 
 
@@ -260,12 +262,17 @@ class ContextHydrator:
             ctx = entity.hydrated_context
             issue_type = ctx.get("issuetype", "Issue")
             summary = ctx.get("summary", "N/A")
-            description = ctx.get("description") or "No description"
 
-            part = f"""## Referenced {issue_type}: {entity.key}
-**Summary**: {summary}
-**Status**: {ctx.get("status", "Unknown")}
-**Labels**: {", ".join(ctx.get("labels", [])) or "None"}
+            # Safely handle description (can be str, dict/ADF, or None)
+            raw_description = ctx.get("description")
+            description = JiraService.description_to_text(raw_description) or "No description"
+
+            issue_link = self.jira_service.get_issue_link(entity.key) if self.jira_service else entity.key
+            part = f"""## Referenced {issue_type}: {issue_link}
+- **Summary**: {summary}
+- **Status**: {ctx.get("status", "Unknown")}
+- **Priority**: {ctx.get("priority", "N/A")}
+- **Labels**: {", ".join(ctx.get("labels", [])) or "None"}
 
 ### Description
 {description[:1000]}{"..." if len(description) > 1000 else ""}
@@ -274,9 +281,11 @@ class ContextHydrator:
             # Add parent context if available
             parent = ctx.get("parent")
             if parent:
+                parent_key = parent.get("key")
+                parent_link = self.jira_service.get_issue_link(parent_key) if self.jira_service else parent_key
                 part += f"""
-### Parent Epic: {parent.get("key")}
-{parent.get("summary", "N/A")}
+### Parent Epic: {parent_link}
+- **Summary**: {parent.get("summary", "N/A")}
 """
 
             context_parts.append(part)
@@ -330,8 +339,23 @@ class EntityExtractionNode:
                 "stories": state.get("stories", []),  # Preserve stories
             }
 
-        # Extract entities
+        # Extract entities from text
         entities = self.extractor.extract(user_input)
+
+        # PHASING: Add "Sticky Context" (parent_epic_id) as a virtual entity if not already present
+        parent_epic_id = state.get("parent_epic_id")
+        if parent_epic_id:
+            # Check if this parent ID is already in our extracted entities list
+            if not any(e.key == parent_epic_id for e in entities):
+                logger.info(f"EntityExtractionNode: Injecting sticky parent {parent_epic_id} as virtual entity")
+                entities.append(
+                    ExtractedEntity(
+                        entity_type="issue",
+                        key=parent_epic_id,
+                        raw_mention="(sticky-sidebar-selection)",
+                        confidence=0.9,  # Slightly lower confidence than explicit text mention
+                    )
+                )
 
         if not entities:
             logger.info("EntityExtractionNode: No entities found in input")

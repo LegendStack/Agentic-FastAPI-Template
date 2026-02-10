@@ -120,7 +120,11 @@ class NodeFactory:
             entity_extraction_node=self._create_entity_extraction_node(EntityExtractionNode),
             intent_node=IntentNode(llm=get_llm_service()),
             # Core processing
-            decompose_node=DecomposeNode(config=self.config),
+            decompose_node=DecomposeNode(
+                config=self.config,
+                llm_service=get_llm_service(),
+                jira_service=self.jira_service,
+            ),
             refine_node=RefineNode(config=self.config),
             enhance_node=StoryEnhanceNode(config=self.config),
             # Quality and formatting

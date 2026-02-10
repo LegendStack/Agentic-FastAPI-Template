@@ -63,9 +63,17 @@ class InputNode:
         logger.info(f"InputNode: User message: '{user_message[:100]}...'")
 
         # Validate input length
-        if len(user_message) < self.MIN_INPUT_LENGTH:
+        min_length = self.MIN_INPUT_LENGTH
+        parent_epic_id = state.get("parent_epic_id")
+
+        # Relax validation if we have sticky context (sidebar selection)
+        if parent_epic_id:
+            min_length = 1  # Anything goes if we have context
+            logger.info(f"InputNode: Relaxing min_length to 1 due to parent_epic_id={parent_epic_id}")
+
+        if len(user_message) < min_length:
             return {
-                "error": f"Input too short. Please provide at least {self.MIN_INPUT_LENGTH} characters describing the epic."
+                "error": f"Input too short. Please provide at least {min_length} characters describing the epic."
             }
 
         if len(user_message) > self.MAX_INPUT_LENGTH:

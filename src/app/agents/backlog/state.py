@@ -56,7 +56,9 @@ class BacklogAgentState(BaseAgentState):
     formatted_output: str | None
     summary: str | None  # Primary summary for the current turn
 
-    # Export (optional)
+    # Confirmation flow (Door B)
+    awaiting_decomposition_confirmation: bool | None
+    awaiting_confirmation_for: dict[str, Any] | None  # Data to be used after confirmation
     export_result: dict[str, Any] | None
 
     # Session    # Metadata

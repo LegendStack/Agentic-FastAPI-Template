@@ -112,7 +112,7 @@ class MockLLM:
         response_content = self.RESPONSES["default"]
 
         # Special case for intent classification
-        if "classify" in prompt_lower and "intent" in prompt_lower:
+        if "classify" in prompt_lower:
             response_content = "decompose"
         else:
             for keyword, response in self.RESPONSES.items():

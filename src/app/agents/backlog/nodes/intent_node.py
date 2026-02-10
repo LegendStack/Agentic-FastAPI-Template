@@ -110,6 +110,19 @@ class IntentNode:
                     logger.info(f"IntentNode: Message too long ({len(user_message)} >= 100), skipping help")
                 break
 
+        # Confirmation Detection (Phase 1, Door B)
+        awaiting_conf = state.get("awaiting_decomposition_confirmation")
+        if awaiting_conf:
+            yes_patterns = ["yes", "proceed", "go ahead", "yep", "sure", "confirm", "do it"]
+            if any(p in lower_message for p in yes_patterns) and len(user_message) < 20:
+                logger.info("IntentNode: User confirmed decomposition. Restoring original intent.")
+                conf_data = state.get("awaiting_confirmation_for") or {}
+                original_intent = conf_data.get("intent", UserIntent.DECOMPOSE.value)
+                return {
+                    "detected_intent": original_intent,
+                    "awaiting_decomposition_confirmation": False
+                }
+
         # Groom indicators
         groom_patterns = [
             "duplicate",
@@ -145,19 +158,36 @@ class IntentNode:
             "status of",
         ]
 
+        # Decompose indicators
+        decompose_patterns = [
+            "decompose",
+            "breakdown",
+            "break down",
+            "to tasks",
+            "to stories",
+            "to subtasks",
+            "split",
+        ]
+
+        decompose_match = any(pattern in lower_message for pattern in decompose_patterns)
         groom_match = any(pattern in lower_message for pattern in groom_patterns)
         view_match = any(pattern in lower_message for pattern in view_patterns)
 
         logger.info(
-            f"IntentNode: Heuristics - groom={groom_match}, view={view_match}, "
+            f"IntentNode: Heuristics - decompose={decompose_match}, groom={groom_match}, view={view_match}, "
             f"has_stories={has_stories}, entities={has_entities}"
         )
 
         # View Intent (Retrieve details without decomposition)
-        # PRIORITY: If user specifically asks to identify/view OR it's a very short query with entities
-        if view_match or (has_entities and len(user_message) < 60):
-            logger.info("IntentNode: Quick match for VIEW intent")
-            return {"detected_intent": UserIntent.VIEW.value}
+        # PRIORITY: Only if we don't have a clear decomposition request
+        if not decompose_match:
+            if view_match or (has_entities and len(user_message) < 60):
+                logger.info("IntentNode: Quick match for VIEW intent")
+                return {"detected_intent": UserIntent.VIEW.value}
+        
+        if decompose_match:
+            logger.info("IntentNode: Quick match for DECOMPOSE intent")
+            return {"detected_intent": UserIntent.DECOMPOSE.value}
 
         if groom_match and has_stories:
             logger.info("IntentNode: Quick match for GROOM intent")

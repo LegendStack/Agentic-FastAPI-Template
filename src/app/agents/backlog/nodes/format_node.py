@@ -86,6 +86,19 @@ class FormatNode:
             }
 
         current_result = state.get("current_result")
+        summary = state.get("summary")
+        
+        if not current_result and summary:
+            logger.info("FormatNode: Formatting summary-only response (Confirmation flow)")
+            messages = state.get("messages", [])
+            messages = messages + [{"role": "assistant", "content": summary}]
+            return {
+                "formatted_output": summary,
+                "summary": summary,
+                "messages": messages,
+                "error": None,
+            }
+
         if not current_result:
             return {
                 "error": state.get("error") or "No decomposition result to format",
@@ -105,7 +118,9 @@ class FormatNode:
             elif output_format == "jira":
                 formatted = self._format_jira(current_result)
             else:  # json
-                formatted = self._format_json(current_result)
+                # Don't stringify JSON into formatted_output; it's redundant.
+                # The frontend already has the structured data in other fields.
+                formatted = ""
 
             logger.info(f"FormatNode: Formatted as {output_format}")
 

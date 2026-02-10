@@ -48,6 +48,7 @@ class TestAzureOpenAI:
     @patch("src.app.agents.azure_openai.AzureChatOpenAI")
     @patch("src.app.agents.azure_openai.settings")
     def test_llm_service_get_embeddings(self, mock_settings, mock_chat, mock_embeddings):
+        mock_settings.AZURE_OPENAI_AUTH_MODE = "api_key"
         mock_settings.AZURE_OPENAI_API_KEY = MagicMock()
         mock_settings.AZURE_OPENAI_API_KEY.get_secret_value.return_value = "fake-key"
         mock_settings.AZURE_OPENAI_ENDPOINT = "https://fake.openai.azure.com"
@@ -154,15 +155,9 @@ class TestJiraIndexer:
     """Tests for Jira Indexer with mocked HTTP client."""
 
     @pytest.mark.asyncio
-    @patch("src.app.agents.jira.httpx.AsyncClient")
-    @patch("src.app.agents.jira.settings")
-    async def test_run_indexes_issues(self, mock_settings, mock_client):
+    async def test_run_indexes_issues(self):
         from src.app.agents.jira import JiraIndexer
-
-        mock_settings.JIRA_URL = "https://jira.example.com"
-        mock_settings.JIRA_USERNAME = "user"
-        mock_settings.JIRA_API_TOKEN = MagicMock()
-        mock_settings.JIRA_API_TOKEN.get_secret_value.return_value = "token"
+        from src.app.services.jira_service import JiraIssue, Result
 
         mock_vector_store = AsyncMock()
         mock_vector_store.add_documents = AsyncMock(return_value=["id1"])
@@ -170,27 +165,23 @@ class TestJiraIndexer:
         mock_llm_service = AsyncMock()
         mock_llm_service.get_embeddings = AsyncMock(return_value=[0.1] * 1536)
 
-        # Mock HTTP response
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "issues": [
-                {
-                    "key": "TEST-1",
-                    "fields": {"summary": "Test Issue", "description": "Desc", "status": {"name": "Open"}},
-                }
-            ]
-        }
-        mock_response.raise_for_status = MagicMock()
+        # Mock JiraService
+        mock_jira_service = MagicMock()
+        sample_issue = JiraIssue(
+            key="TEST-1",
+            summary="Test Issue",
+            description="Desc",
+            issue_type="Story",
+            status="Open",
+        )
+        mock_jira_service.search_issues = AsyncMock(return_value=Result.ok([sample_issue]))
 
-        mock_client_instance = AsyncMock()
-        mock_client_instance.get = AsyncMock(return_value=mock_response)
-        mock_client.return_value.__aenter__.return_value = mock_client_instance
-
-        indexer = JiraIndexer(mock_vector_store, mock_llm_service)
+        indexer = JiraIndexer(mock_vector_store, mock_llm_service, jira_service=mock_jira_service)
         result = await indexer.run(project_key="TEST")
 
         assert result["status"] == "success"
         assert result["issues_indexed"] == 1
+        mock_jira_service.search_issues.assert_called_once()
 
 
 # --- Tests for persistence.py ---
@@ -212,6 +203,6 @@ class TestSqlAlchemyCheckpointSaver:
         checkpoint = {"id": "ckpt-1", "parent_id": None}
         metadata = {"step": 1}
 
-        await saver.aput(config, checkpoint, metadata)
+        await saver.aput(config, checkpoint, metadata, {})
         mock_db.execute.assert_called_once()
         mock_db.commit.assert_called_once()

@@ -131,8 +131,15 @@ class GraphBuilder:
             },
         )
 
-        # Decompose and Refine go to Critic
-        workflow.add_edge("decompose", "critic")
+        # Decompose goes to Critic OR Format (if awaiting confirmation)
+        workflow.add_conditional_edges(
+            "decompose",
+            lambda s: "format" if s.get("awaiting_decomposition_confirmation") else "critic",
+            {
+                "critic": "critic",
+                "format": "format",
+            },
+        )
         workflow.add_edge("refine", "critic")
 
         # Critic → TestGen → Prioritize (sequenced for now)

@@ -388,8 +388,8 @@ class TestFormatNode:
 
         result = await node(state)
         assert result.get("error") is None
-        assert result.get("formatted_output") is not None
-        assert "STORY-001" in result["formatted_output"]
+        # In JSON mode, formatted_output should be empty to allow frontend fallback to summary
+        assert result.get("formatted_output") == ""
 
     @pytest.mark.asyncio
     async def test_format_markdown(self):

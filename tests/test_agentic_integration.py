@@ -11,10 +11,10 @@ import pytest
 class TestAgentAPIIntegration:
     """Integration tests for Agent API endpoints."""
 
-    @patch("src.app.api.v1.agents.LLMService")
+    @patch("src.app.api.v1.agents.get_llm_service")
     @patch("src.app.api.v1.agents.VectorStoreFactory")
     @patch("src.app.api.v1.agents.DocumentIndexer")
-    def test_index_file_endpoint(self, mock_indexer_class, mock_factory, mock_llm, client):
+    def test_index_file_endpoint(self, mock_indexer_class, mock_factory, mock_llm_get_service, client):
         """Test the /agents/index-file endpoint."""
         # Setup mocks
         mock_indexer_instance = AsyncMock()
@@ -22,6 +22,10 @@ class TestAgentAPIIntegration:
             return_value={"source_id": "test_doc", "chunks_indexed": 5, "status": "success"}
         )
         mock_indexer_class.return_value = mock_indexer_instance
+
+        mock_vector_store = MagicMock()
+        mock_vector_store.close = AsyncMock()
+        mock_factory.get_store.return_value = mock_vector_store
 
         # Create a test file
         test_file_content = b"This is a test document for indexing."
@@ -34,15 +38,18 @@ class TestAgentAPIIntegration:
         # In a real integration test environment, we'd have a test database
         assert response.status_code in [200, 500, 422]  # 422 if validation fails, 500 if DB not mocked
 
+    @patch("src.app.api.v1.agents.get_llm_service")
     @patch("src.app.api.v1.agents.SqlAlchemyCheckpointSaver")
     @patch("src.app.api.v1.agents.DocAssistantAgent")
-    def test_chat_endpoint(self, mock_agent_class, mock_checkpointer, client):
+    def test_chat_endpoint(self, mock_agent_class, mock_checkpointer, mock_llm_get_service, client):
         """Test the /agents/chat endpoint."""
         mock_agent_instance = AsyncMock()
         mock_agent_instance.chat = AsyncMock(
             return_value={"role": "assistant", "content": "Hello! I'm your doc assistant."}
         )
         mock_agent_class.return_value = mock_agent_instance
+        # Mock get_llm_service to avoid initialization errors
+        mock_llm_get_service.return_value = MagicMock()
 
         response = client.post("/api/v1/agents/chat", params={"message": "Hello", "thread_id": "test-thread"})
 
@@ -90,46 +97,10 @@ class TestJiraIndexerIntegration:
     """Integration tests for Jira Indexer."""
 
     @pytest.mark.asyncio
-    @patch("src.app.agents.jira.httpx.AsyncClient")
-    @patch("src.app.agents.jira.settings")
-    async def test_full_jira_sync_flow(self, mock_settings, mock_http_client):
-        """Test the full Jira sync flow with mocked HTTP."""
+    async def test_full_jira_sync_flow(self):
+        """Test the full Jira sync flow with mocked JiraService."""
         from src.app.agents.jira import JiraIndexer
-
-        # Configure settings
-        mock_settings.JIRA_URL = "https://jira.example.com"
-        mock_settings.JIRA_USERNAME = "test_user"
-        mock_settings.JIRA_API_TOKEN = MagicMock()
-        mock_settings.JIRA_API_TOKEN.get_secret_value.return_value = "test_token"
-
-        # Mock HTTP response
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "issues": [
-                {
-                    "key": "PROJ-1",
-                    "fields": {
-                        "summary": "First Issue",
-                        "description": "Description of first issue",
-                        "status": {"name": "Open"},
-                    },
-                },
-                {
-                    "key": "PROJ-2",
-                    "fields": {
-                        "summary": "Second Issue",
-                        "description": "Description of second issue",
-                        "status": {"name": "In Progress"},
-                    },
-                },
-            ]
-        }
-        mock_response.raise_for_status = MagicMock()
-
-        mock_client_instance = AsyncMock()
-        mock_client_instance.get = AsyncMock(return_value=mock_response)
-        mock_http_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
-        mock_http_client.return_value.__aexit__ = AsyncMock()
+        from src.app.services.jira_service import JiraIssue, Result
 
         # Mock vector store and LLM
         mock_vector_store = AsyncMock()
@@ -138,7 +109,15 @@ class TestJiraIndexerIntegration:
         mock_llm_service = AsyncMock()
         mock_llm_service.get_embeddings = AsyncMock(return_value=[0.1] * 1536)
 
-        indexer = JiraIndexer(mock_vector_store, mock_llm_service)
+        # Mock JiraService
+        mock_jira_service = MagicMock()
+        sample_issues = [
+            JiraIssue(key="PROJ-1", summary="First Issue", description="Desc 1", issue_type="Story", status="Open"),
+            JiraIssue(key="PROJ-2", summary="Second Issue", description="Desc 2", issue_type="Story", status="In Progress"),
+        ]
+        mock_jira_service.search_issues = AsyncMock(return_value=Result.ok(sample_issues))
+
+        indexer = JiraIndexer(mock_vector_store, mock_llm_service, jira_service=mock_jira_service)
         result = await indexer.run(project_key="PROJ")
 
         assert result["status"] == "success"
@@ -200,7 +179,7 @@ class TestCheckpointSaverIntegration:
         checkpoint = {"id": "checkpoint-1", "parent_id": None, "ts": "2026-01-31T20:00:00Z"}
         metadata = {"step": 1, "source": "test"}
 
-        await saver.aput(config, checkpoint, metadata)
+        await saver.aput(config, checkpoint, metadata, {})
 
         mock_session.execute.assert_called_once()
         mock_session.commit.assert_called_once()

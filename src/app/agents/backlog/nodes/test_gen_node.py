@@ -33,7 +33,9 @@ class TestGenNode:
         logger.info("TestGenNode: Generating test scenarios")
 
         current_result = state.get("current_result")
+        logger.info(f"DEBUG: TestGenNode - current_result type={type(current_result)}")
         if not current_result:
+            logger.error("DEBUG: TestGenNode - No current_result found in state!")
             return {"error": "No decomposition result to generate tests for"}
 
         # Convert from dict if needed

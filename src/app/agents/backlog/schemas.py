@@ -76,7 +76,7 @@ class UserStory(BaseModel):
     description: str = Field(
         ...,
         description="Full story description in user story format",
-        min_length=10,
+        min_length=1,
     )
     acceptance_criteria: list[AcceptanceCriteria] = Field(
         default_factory=list,
@@ -96,7 +96,10 @@ class UserStory(BaseModel):
     )
     test_scenarios: list[str] = Field(
         default_factory=list,
-        description="Detailed Gherkin scripts for QA/Automation. Optional: use only for complex technical validation or scenarios not covered by ACs.",
+        description=(
+            "Detailed Gherkin scripts for QA/Automation. Optional: use only for "
+            "complex technical validation or scenarios not covered by ACs."
+        ),
     )
     estimated_complexity: Literal["XS", "S", "M", "L", "XL"] | None = Field(
         None,

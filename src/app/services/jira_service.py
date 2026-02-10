@@ -113,6 +113,14 @@ class JiraConfig:
     retry_delay_seconds: float = 1.0
     request_timeout_seconds: float = 30.0
 
+    def get_issue_url(self, key: str) -> str:
+        """Get the full web URL for a Jira issue."""
+        return f"{self.base_url}browse/{key}"
+
+    def get_issue_link(self, key: str) -> str:
+        """Get a markdown link for a Jira issue."""
+        return f"[{key}]({self.get_issue_url(key)})"
+
     @classmethod
     def from_settings(cls) -> JiraConfig:
         """Create JiraConfig from application settings."""
@@ -458,16 +466,61 @@ class JiraService:
 
     Example:
         config = JiraConfig.from_settings()
-        jira = JiraService(config)
-
-        result = await jira.get_issue("PDLC-24")
-        if result.is_ok:
-            print(result.value.summary)
+        service = JiraService(config)
+        result = await service.get_issue("PROJ-123")
     """
+
+    @staticmethod
+    def description_to_text(description: Any) -> str:
+        """
+        Safely convert Jira description (ADF dict or string) to plain text.
+
+        Handles:
+        - None -> ""
+        - str -> str
+        - dict (ADF) -> extracted text from paragraphs
+        """
+        if description is None:
+            return ""
+        if isinstance(description, str):
+            return description
+        if isinstance(description, dict):
+            # Basic ADF extraction (Atlassian Document Format)
+            try:
+                content_parts = []
+                # ADF structure: {"type": "doc", "content": [{"type": "paragraph", "content": [...]}, ...]}
+                for item in description.get("content", []):
+                    item_type = item.get("type")
+                    if item_type == "paragraph":
+                        for sub_item in item.get("content", []):
+                            if sub_item.get("type") == "text":
+                                content_parts.append(sub_item.get("text", ""))
+                    elif item_type == "text":
+                        content_parts.append(item.get("text", ""))
+                    elif item_type == "bulletList" or item_type == "orderedList":
+                        for list_item in item.get("content", []):
+                            for p in list_item.get("content", []):
+                                if p.get("type") == "paragraph":
+                                    for t in p.get("content", []):
+                                        if t.get("type") == "text":
+                                            content_parts.append(f"* {t.get('text', '')}")
+
+                return "\n".join(content_parts)
+            except Exception:
+                return str(description)
+        return str(description)
 
     def __init__(self, config: JiraConfig):
         self.config = config
         self._client: httpx.AsyncClient | None = None
+
+    def get_issue_url(self, key: str) -> str:
+        """Get the full web URL for a Jira issue."""
+        return self.config.get_issue_url(key)
+
+    def get_issue_link(self, key: str) -> str:
+        """Get a markdown link for a Jira issue."""
+        return self.config.get_issue_link(key)
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""

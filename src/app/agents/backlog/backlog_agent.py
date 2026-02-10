@@ -152,7 +152,8 @@ class BacklogAssistantAgent:
             groom_node_fn=self._groom_node,
         )
 
-        logger.info("BacklogAssistantAgent: Nodes initialized via NodeFactory")
+        logger.info(f"DEBUG: DecomposeNode attributes: {dir(self._nodes.decompose_node)}")
+        logger.info(f"BacklogAssistantAgent: Nodes initialized via NodeFactory")
 
     def _build_graph(self):
         """
@@ -630,6 +631,7 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
             "story_count": len(final_state.get("stories", [])),
             "output_format": final_state.get("output_format"),
             "is_locked": final_state.get("is_locked", False),
+            "detected_intent": final_state.get("detected_intent"),
             "metadata": {
                 "is_refinement": not final_state.get("is_first_message", True),
                 "config": {
@@ -642,7 +644,8 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
             "target_issue_type": final_state.get("target_issue_type", "Story"),
         }
 
-        if current_result and self.checkpointer and hasattr(self.checkpointer, "db"):
+        # Save assistant message to history if persistence is enabled
+        if self.checkpointer and hasattr(self.checkpointer, "db"):
             from ..conversations import ConversationService
 
             conversation_service = ConversationService(self.checkpointer.db)
@@ -654,7 +657,15 @@ Just describe your epic or feature, and I'll create a detailed breakdown for you
 
             # Use content from FormatNode if available (has rich Jira links)
             assistant_messages = [m for m in final_state.get("messages", []) if m.get("role") == "assistant"]
-            assistant_content = assistant_messages[-1].get("content") if assistant_messages else current_result.summary
+            
+            if assistant_messages:
+                assistant_content = assistant_messages[-1].get("content")
+            elif current_result:
+                assistant_content = current_result.summary
+            else:
+                # Fallback to summary in state if no assistant messages or result
+                # This ensures early-return nodes (Help, View, Confirmation) are persisted
+                assistant_content = final_state.get("summary") or "Response generated."
 
             await conversation_service.add_message(
                 thread_id=thread_id,

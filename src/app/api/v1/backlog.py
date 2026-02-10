@@ -24,6 +24,7 @@ from ...agents.backlog.schemas import UserStory
 from ...agents.persistence import SqlAlchemyCheckpointSaver
 from ...api.dependencies import get_optional_user
 from ...core.db.database import async_get_db
+from ...core.config import settings
 from ...models.user import User
 
 router = APIRouter(prefix="/backlog", tags=["backlog"])
@@ -129,6 +130,7 @@ class DecomposeResponse(BaseModel):
     is_locked: bool = False
     target_level: str | None = "story"
     target_issue_type: str | None = "Story"
+    detected_intent: str | None = None
 
 
 class RefineRequest(BaseModel):
@@ -199,13 +201,17 @@ def get_agent(
 
     # Create JiraService for dependency injection
     jira_service = None
-    try:
-        jira_config = JiraConfig.from_settings()
-        if jira_config.is_configured:
-            jira_service = JiraService(jira_config)
-    except JiraConfigurationError:
-        # Jira not configured - agent will work without Jira features
-        pass
+    if config and config.USE_MOCKS:
+        from ...agents.demo.mocks.mock_jira import MockJiraService
+        jira_service = MockJiraService(config)
+    else:
+        try:
+            jira_config = JiraConfig.from_settings()
+            if jira_config.is_configured:
+                jira_service = JiraService(jira_config)
+        except JiraConfigurationError:
+            # Jira not configured - agent will work without Jira features
+            pass
 
     return BacklogAssistantAgent(
         config=config,
@@ -257,7 +263,7 @@ async def chat_handler(
     """
     config = BacklogAgentConfig(
         DEFAULT_OUTPUT_FORMAT=request.output_format or "json",
-        USE_MOCKS=False,
+        USE_MOCKS=settings.BACKLOG_USE_MOCKS,
     )
 
     try:
@@ -312,6 +318,7 @@ async def chat_handler(
             is_locked=result.get("is_locked", False),
             target_level=result.get("target_level", "story"),
             target_issue_type=result.get("target_issue_type", "Story"),
+            detected_intent=result.get("detected_intent"),
         )
     except Exception as e:
         import traceback
@@ -338,7 +345,7 @@ async def decompose_epic(
         DEFAULT_OUTPUT_FORMAT=request.output_format,
         ENABLE_EDGE_CASES=request.enable_edge_cases,
         ENABLE_COMPLEXITY_ESTIMATION=request.enable_complexity_estimation,
-        USE_MOCKS=False,  # Explicitly disable mocks for the real endpoint
+        USE_MOCKS=settings.BACKLOG_USE_MOCKS,  # Inherit from settings
     )
 
     try:
@@ -393,9 +400,9 @@ async def decompose_epic(
         )
     except Exception as e:
         import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Debug Error Decompose: {str(e)}")
+        tb = traceback.format_exc()
+        print(tb) # Keep printing to stdout just in case
+        raise HTTPException(status_code=500, detail=f"Debug Error Decompose: {str(e)}\n\nTraceback:\n{tb}")
 
 
 @router.post("/chat/{thread_id}", response_model=DecomposeResponse)
@@ -413,7 +420,7 @@ async def refine_decomposition(
     1. **Continuation**: Send feedback for stories already in the thread.
     2. **Hydration (Door B)**: Send a list of `stories` in the first message to initialize refinement.
     """
-    config = BacklogAgentConfig(USE_MOCKS=False)
+    config = BacklogAgentConfig(USE_MOCKS=settings.BACKLOG_USE_MOCKS)
 
     try:
         agent = get_agent(db, config=config)
@@ -591,10 +598,10 @@ async def refine_existing_stories(
     Directly injects existing stories into the agent state and
     processes the feedback message. This is the "Door B" entry point.
     """
-    config = BacklogAgentConfig(USE_MOCKS=False)
+    config = BacklogAgentConfig(USE_MOCKS=settings.BACKLOG_USE_MOCKS)
     agent = get_agent(db, config)
 
-    thread_id = request.thread_id or str(uuid.uuid4())
+    thread_id = thread_id or str(uuid.uuid4())
     user_id = str(current_user.id) if current_user else "anonymous"
 
     result = await agent.chat(
@@ -624,6 +631,8 @@ async def refine_existing_stories(
         error=result.get("error"),
         usage=result.get("usage"),
         is_locked=result.get("is_locked", False),
+        target_level=result.get("target_level", "story"),
+        target_issue_type=result.get("target_issue_type", "Story"),
     )
 
 
@@ -646,7 +655,7 @@ async def export_to_jira(
     config = BacklogAgentConfig(
         ENABLE_JIRA_EXPORT=True,
         JIRA_PROJECT_KEY=request.project_key if request else None,
-        USE_MOCKS=False,
+        USE_MOCKS=settings.BACKLOG_USE_MOCKS, # Use global settings instead of hardcoded False
     )
 
     agent = get_agent(db, config)

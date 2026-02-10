@@ -82,25 +82,40 @@ class StructuredOutputValidator:
             raise StructuredOutputError(f"Failed to parse output: {e}")
 
     def _extract_json(self, content: str) -> dict[str, Any]:
-        """Extract JSON from markdown code blocks."""
+        """Extract JSON from markdown code blocks or raw text."""
         import re
 
-        # Look for JSON in code blocks
+        # 1. Try markdown code blocks first
         patterns = [
             r"```json\s*\n(.*?)\n```",
             r"```\s*\n(.*?)\n```",
-            r"\{.*\}",
         ]
 
         for pattern in patterns:
             match = re.search(pattern, content, re.DOTALL)
             if match:
                 try:
-                    return json.loads(match.group(1) if "```" in pattern else match.group(0))
+                    return json.loads(match.group(1).strip())
                 except json.JSONDecodeError:
                     continue
 
-        raise ValueError("Could not extract JSON from content")
+        # 2. Try to find the outermost { } pair
+        try:
+            # Find the first { and the last }
+            start = content.find("{")
+            end = content.rfind("}")
+            
+            if start != -1 and end != -1 and end > start:
+                json_str = content[start : end + 1]
+                return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+
+        # 3. Fallback to full string if no markers and steps 1 & 2 failed
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError:
+            raise ValueError(f"Could not extract valid JSON from content. Content starts with: {content[:100]}...")
 
     async def with_retry(
         self, llm: LLMService, prompt: str, schema: type[T], max_retries: int = 3, system_prompt: str | None = None
