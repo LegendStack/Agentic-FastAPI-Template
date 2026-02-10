@@ -52,17 +52,19 @@ class ConfluenceIndexer(BaseIndexer):
     ):
         self.vector_store = vector_store
         self.llm = llm_service
-        
+
         # Load from settings if not provided
         self.base_url = (base_url or settings.CONFLUENCE_URL or "").rstrip("/")
         self.username = username or settings.CONFLUENCE_USERNAME or ""
-        
-        token_val = api_token or (settings.CONFLUENCE_API_TOKEN.get_secret_value() if settings.CONFLUENCE_API_TOKEN else "")
+
+        token_val = api_token or (
+            settings.CONFLUENCE_API_TOKEN.get_secret_value() if settings.CONFLUENCE_API_TOKEN else ""
+        )
         self.api_token = token_val
-        
+
         auth_mode_env = getattr(settings, "CONFLUENCE_AUTH_MODE", "basic").lower()
         self.auth_mode = auth_mode_env
-        
+
         # Auto-detect Cloud and correct auth mode
         if "atlassian.net" in self.base_url.lower() and self.auth_mode == "pat":
             logger.warning(

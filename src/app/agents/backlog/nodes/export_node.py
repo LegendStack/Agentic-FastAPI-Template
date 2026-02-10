@@ -75,7 +75,7 @@ class ExportNode:
         tags = getattr(story_or_epic, "tags", []) or []
         default_tags = self.config.DEFAULT_TAGS or []
         all_labels = set(tags + default_tags + ["ai"])
-        return sorted(list(all_labels))
+        return sorted(all_labels)
 
     async def _create_epic_via_service(
         self,
@@ -275,8 +275,6 @@ class ExportNode:
         if not self._jira_service:
             raise RuntimeError("JiraService not available")
 
-        from ....services.jira_service import CreateEpicPayload, CreateIssuePayload
-
         # Determine project key (Priority: Epic > State > Config > Default)
         project_key = (
             (result.epic.project_key if result.epic else None)
@@ -288,17 +286,62 @@ class ExportNode:
         base_url = settings.JIRA_URL
         created_issues = []
         errors = []
-        # Robust Parent Key Handling: Only use parent_epic_id if it looks like a real JIRA key
-        # (contains a hyphen and isn't just a generated internal ID like EPIC-001)
+
+        # Robust Parent Key Handling
         current_parent_epic_id = state.get("parent_epic_id")
         if current_parent_epic_id and "-" not in current_parent_epic_id:
             logger.warning(f"ExportNode: Ignoring invalid parent_epic_id: {current_parent_epic_id}")
             current_parent_epic_id = None
 
-
         # 1. Handle Epic creation/update
+        current_parent_epic_id = await self._export_epic(
+            result, project_key, current_parent_epic_id, created_issues, errors, base_url
+        )
+
+        # 2. Handle Story creation/update
+        await self._export_stories(
+            result.stories,
+            project_key,
+            current_parent_epic_id,
+            created_issues,
+            errors,
+            base_url,
+            state,
+        )
+
+        status = "success" if not errors else "partial_success" if created_issues else "error"
+
+        status = "success" if not errors else "partial_success" if created_issues else "error"
+
+        # Update stories with Jira info
+        jira_lookup = {issue["internal_id"]: issue for issue in created_issues}
+        for story in result.stories:
+            if story.id in jira_lookup:
+                story.jira_key = jira_lookup[story.id]["jira_key"]
+                story.jira_url = jira_lookup[story.id]["url"]
+
+        return {
+            "status": status,
+            "message": f"Created {len(created_issues)} of {len(result.stories)} issues via JiraService",
+            "issues": created_issues,
+            "errors": errors,
+            "epic_key": current_parent_epic_id,
+            "stories": result.stories,
+        }
+
+    async def _export_epic(
+        self,
+        result: DecompositionResult,
+        project_key: str,
+        current_parent_epic_id: str | None,
+        created_issues: list,
+        errors: list,
+        base_url: str,
+    ) -> str | None:
+        """Handle Epic creation or update."""
+        from ....services.jira_service import CreateEpicPayload
+
         if current_parent_epic_id:
-            # Epic exists, try to update it
             if result.epic:
                 try:
                     logger.info(f"ExportNode: Updating existing Epic {current_parent_epic_id} via service")
@@ -318,7 +361,6 @@ class ExportNode:
                 except Exception as e:
                     logger.warning(f"ExportNode: Failed to update Epic {current_parent_epic_id}: {e}")
         elif result.epic:
-            # Create new Epic
             try:
                 logger.info(f"ExportNode: Creating new Epic '{result.epic.title}' via service")
                 epic_data = result.epic.to_jira_format()
@@ -354,120 +396,132 @@ class ExportNode:
                 logger.error(f"ExportNode: Failed to create Epic: {e}")
                 errors.append({"story_id": "EPIC_CREATION", "error": str(e)})
 
-        # 2. Handle Story creation/update
-        for story in result.stories:
-            try:
-                # Build description with rich fields
-                description_parts = [story.description, ""]
+        return current_parent_epic_id
 
-                if story.acceptance_criteria:
-                    ac_text = "\n".join([f"* {ac.description}" for ac in story.acceptance_criteria])
-                    description_parts.append("h3. Acceptance Criteria")
-                    description_parts.append(ac_text)
-                    description_parts.append("")
+    async def _export_stories(
+        self,
+        stories: list[UserStory],
+        project_key: str,
+        current_parent_epic_id: str | None,
+        created_issues: list,
+        errors: list,
+        base_url: str,
+        state: BacklogAgentState,
+    ) -> None:
+        """Handle multiple stories export."""
+        for story in stories:
+            await self._export_single_story(
+                story,
+                project_key,
+                current_parent_epic_id,
+                created_issues,
+                errors,
+                base_url,
+                state,
+            )
 
-                if story.technical_notes:
-                    tech_notes_text = "\n".join([f"* {note}" for note in story.technical_notes])
-                    description_parts.append("h3. Technical Notes")
-                    description_parts.append(tech_notes_text)
-                    description_parts.append("")
+    async def _export_single_story(
+        self,
+        story: UserStory,
+        project_key: str,
+        current_parent_epic_id: str | None,
+        created_issues: list,
+        errors: list,
+        base_url: str,
+        state: BacklogAgentState,
+    ) -> None:
+        """Handle single story export/update."""
+        from ....services.jira_service import CreateIssuePayload
 
-                if story.edge_cases:
-                    description_parts.append("h3. Edge Cases")
-                    for ec in story.edge_cases:
-                        description_parts.append(f"* {ec}")
-                    description_parts.append("")
+        try:
+            # 1. Build description
+            description_parts = [story.description, ""]
+            if story.acceptance_criteria:
+                ac_text = "\n".join([f"* {ac.description}" for ac in story.acceptance_criteria])
+                description_parts.append("h3. Acceptance Criteria")
+                description_parts.append(ac_text)
+                description_parts.append("")
 
-                if story.test_scenarios:
-                    description_parts.append("h3. QA Scenarios")
-                    for scenario in story.test_scenarios:
-                        clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
-                        description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
-                    description_parts.append("")
+            if story.technical_notes:
+                tech_notes_text = "\n".join([f"* {note}" for note in story.technical_notes])
+                description_parts.append("h3. Technical Notes")
+                description_parts.append(tech_notes_text)
+                description_parts.append("")
 
-                full_description = "\n".join(description_parts).strip()
-                labels = self._get_labels(story)
+            if story.edge_cases:
+                description_parts.append("h3. Edge Cases")
+                for ec in story.edge_cases:
+                    description_parts.append(f"* {ec}")
+                description_parts.append("")
 
-                if story.jira_key:
-                    # Update existing issue
-                    update_result = await self._jira_service.update_issue(
-                        story.jira_key,
+            if story.test_scenarios:
+                description_parts.append("h3. QA Scenarios")
+                for scenario in story.test_scenarios:
+                    clean_scenario = scenario.replace("```gherkin", "").replace("```", "").strip()
+                    description_parts.append("{code:gherkin}\n" + clean_scenario + "\n{code}")
+                description_parts.append("")
+
+            full_description = "\n".join(description_parts).strip()
+            labels = self._get_labels(story)
+
+            # 2. Update if key exists
+            if story.jira_key:
+                update_result = await self._jira_service.update_issue(
+                    story.jira_key,
+                    {
+                        "summary": story.title,
+                        "description": full_description,
+                        "labels": labels,
+                    },
+                )
+                if update_result.is_ok:
+                    created_issues.append(
                         {
+                            "internal_id": story.id,
+                            "jira_key": story.jira_key,
+                            "url": f"{base_url}/browse/{story.jira_key}",
+                            "status": "updated",
                             "summary": story.title,
-                            "description": full_description,
-                            "labels": labels,
-                        },
+                        }
                     )
+                    return
+                # If update failed (e.g., 404), fall through to creation
 
-                    if update_result.is_ok:
-                        created_issues.append(
-                            {
-                                "internal_id": story.id,
-                                "jira_key": story.jira_key,
-                                "url": f"{base_url}/browse/{story.jira_key}",
-                                "status": "updated",
-                                "summary": story.title,
-                            }
-                        )
-                    else:
-                        # Create if update failed with 404
-                        raise ValueError("Create new (update failed)")
-                else:
-                    raise ValueError("Create new")
+            # 3. Create new issue
+            target_type = state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE
+            parent_key = current_parent_epic_id if target_type != self.config.JIRA_EPIC_ISSUE_TYPE else None
 
-            except ValueError:
-                # Create new issue
-                try:
-                    payload = CreateIssuePayload(
-                        project_key=project_key,
-                        summary=story.title,
-                        description=full_description,
-                        issue_type=state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE,
-                        parent_key=current_parent_epic_id if (state.get("target_issue_type") or self.config.JIRA_ISSUE_TYPE) != self.config.JIRA_EPIC_ISSUE_TYPE else None,
-                        labels=labels,
-                    )
+            payload = CreateIssuePayload(
+                project_key=project_key,
+                summary=story.title,
+                description=full_description,
+                issue_type=target_type,
+                parent_key=parent_key,
+                labels=labels,
+            )
 
-                    create_result = await self._jira_service.create_issue(payload)
+            create_result = await self._jira_service.create_issue(payload)
+            if create_result.is_ok:
+                created_issues.append(
+                    {
+                        "internal_id": story.id,
+                        "jira_key": create_result.value,
+                        "url": f"{base_url}/browse/{create_result.value}",
+                        "status": "created",
+                        "summary": story.title,
+                    }
+                )
+            else:
+                errors.append(
+                    {
+                        "story_id": story.id,
+                        "error": create_result.error.message,
+                    }
+                )
 
-                    if create_result.is_ok:
-                        created_issues.append(
-                            {
-                                "internal_id": story.id,
-                                "jira_key": create_result.value,
-                                "url": f"{base_url}/browse/{create_result.value}",
-                                "status": "created",
-                                "summary": story.title,
-                            }
-                        )
-                    else:
-                        errors.append(
-                            {
-                                "story_id": story.id,
-                                "error": create_result.error.message,
-                            }
-                        )
-                except Exception as e:
-                    errors.append({"story_id": story.id, "error": str(e)})
-            except Exception as e:
-                errors.append({"story_id": story.id, "error": str(e)})
-
-        status = "success" if not errors else "partial_success" if created_issues else "error"
-
-        # Update stories with Jira info
-        jira_lookup = {issue["internal_id"]: issue for issue in created_issues}
-        for story in result.stories:
-            if story.id in jira_lookup:
-                story.jira_key = jira_lookup[story.id]["jira_key"]
-                story.jira_url = jira_lookup[story.id]["url"]
-
-        return {
-            "status": status,
-            "message": f"Created {len(created_issues)} of {len(result.stories)} issues via JiraService",
-            "issues": created_issues,
-            "errors": errors,
-            "epic_key": current_parent_epic_id,
-            "stories": result.stories,
-        }
+        except Exception as e:
+            logger.error(f"ExportNode: Failed to export story {story.id}: {e}")
+            errors.append({"story_id": story.id, "error": str(e)})
 
     async def _jira_export(self, result: DecompositionResult, state: BacklogAgentState) -> dict[str, Any]:
         """

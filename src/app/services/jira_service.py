@@ -124,13 +124,9 @@ class JiraConfig:
         auth_mode = AuthMode(auth_mode_env)
 
         # Auto-detect Cloud and correct auth mode
-        if (
-            "atlassian.net" in settings.JIRA_URL.lower() 
-            and auth_mode == AuthMode.PAT
-        ):
+        if "atlassian.net" in settings.JIRA_URL.lower() and auth_mode == AuthMode.PAT:
             logger.warning(
-                "JiraConfig: 'pat' auth mode detected for Atlassian Cloud. "
-                "Switching to 'basic' auth (API Token)."
+                "JiraConfig: 'pat' auth mode detected for Atlassian Cloud. Switching to 'basic' auth (API Token)."
             )
             auth_mode = AuthMode.BASIC
 
@@ -375,7 +371,7 @@ class CreateIssuePayload:
                 # We prioritize 'parent' but will fallback in JiraService if it fails
                 fields["parent"] = {"key": self.parent_key}
                 if config.epic_link_field:
-                     fields[config.epic_link_field] = self.parent_key
+                    fields[config.epic_link_field] = self.parent_key
             elif config.epic_link_field:
                 # Data Center / Server v2 uses Epic Link custom field
                 fields[config.epic_link_field] = self.parent_key
@@ -620,19 +616,13 @@ class JiraService:
         Returns:
             Result containing the new issue key or error
         """
-        logger.info(
-            f"JiraService: Creating {payload.issue_type} in {payload.project_key}"
-        )
+        logger.info(f"JiraService: Creating {payload.issue_type} in {payload.project_key}")
 
         jira_payload = payload.to_jira_payload(self.config)
         result = await self._request("POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload)
 
         # Resilient Linking Fix: If 400 error on Cloud, it might be a Classic vs Next-gen mismatch
-        if (
-            result.is_error
-            and result.error.code == JiraErrorCode.VALIDATION_ERROR
-            and self.config.api_version == 3
-        ):
+        if result.is_error and result.error.code == JiraErrorCode.VALIDATION_ERROR and self.config.api_version == 3:
             # Check if it's a parent field rejection
             error_text = str(result.error.details)
             if "parent" in error_text or "Field 'parent' cannot be set" in error_text:
@@ -640,16 +630,12 @@ class JiraService:
                 if "parent" in jira_payload["fields"]:
                     del jira_payload["fields"]["parent"]
                     # Epic Link should already be in payload from to_jira_payload if configured
-                    result = await self._request(
-                        "POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload
-                    )
+                    result = await self._request("POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload)
             elif self.config.epic_link_field and self.config.epic_link_field in error_text:
                 logger.warning(f"JiraService: '{self.config.epic_link_field}' rejected, retrying with parent only")
                 if self.config.epic_link_field in jira_payload["fields"]:
                     del jira_payload["fields"][self.config.epic_link_field]
-                    result = await self._request(
-                        "POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload
-                    )
+                    result = await self._request("POST", f"rest/api/{self.config.api_version}/issue", json=jira_payload)
 
         if result.is_ok:
             key = result.value.get("key", "")
@@ -657,8 +643,7 @@ class JiraService:
             return Result.ok(key)
 
         logger.error(
-            f"JiraService: Failed to create issue. Status: {result.error.status_code}, "
-            f"Error: {result.error.message}"
+            f"JiraService: Failed to create issue. Status: {result.error.status_code}, Error: {result.error.message}"
         )
         if result.error.details:
             logger.error(f"JiraService: Error details: {result.error.details}")
