@@ -259,6 +259,7 @@ class AISettings(BaseSettings):
     JIRA_CLIENT_SECRET: SecretStr | None = None
     JIRA_REFRESH_TOKEN: str | None = None
     JIRA_CLOUD_ID: str | None = None
+    JIRA_USE_FRONTEND_REPORTER: bool = False
     # Backlog Agent Settings (Enterprise Decomposition)
     BACKLOG_USE_MOCKS: bool = False
 

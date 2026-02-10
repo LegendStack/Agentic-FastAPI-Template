@@ -80,6 +80,7 @@ class JiraConfig:
     # Jira Compatibility
     api_version: int = 3
     use_adf: bool = True
+    use_frontend_reporter: bool = False
 
     def format_description(self, description: str) -> str | dict[str, Any]:
         """Format description based on Jira version/settings."""
@@ -141,6 +142,7 @@ class JiraConfig:
             epic_link_field=settings.JIRA_EPIC_LINK_FIELD,
             api_version=settings.JIRA_API_VERSION,
             use_adf=settings.JIRA_USE_ADF,
+            use_frontend_reporter=settings.JIRA_USE_FRONTEND_REPORTER,
         )
 
     @property
@@ -346,6 +348,7 @@ class CreateIssuePayload:
     issue_type: str = "Story"
     description: str | None = None
     parent_key: str | None = None
+    reporter: str | None = None
     labels: list[str] = field(default_factory=list)
     custom_fields: dict[str, Any] = field(default_factory=dict)
 
@@ -376,6 +379,19 @@ class CreateIssuePayload:
                 # Data Center / Server v2 uses Epic Link custom field
                 fields[config.epic_link_field] = self.parent_key
 
+        # Add reporter if provided
+        if self.reporter:
+            if config.use_frontend_reporter:
+                # Frontend reporter is typically the user's email or display name
+                fields["reporter"] = {"name": self.reporter}
+            elif config.api_version == 3:
+                # Cloud v3: Use accountId
+                fields["reporter"] = {"accountId": self.reporter}
+            else:
+                # Data Center v2: Use name (username) or key
+                # We prioritize 'name' as it's more common for lookups
+                fields["reporter"] = {"name": self.reporter}
+
         # Add custom fields
         for field_id, value in self.custom_fields.items():
             fields[field_id] = value
@@ -390,6 +406,7 @@ class CreateEpicPayload:
     project_key: str
     summary: str
     description: str | None = None
+    reporter: str | None = None
     labels: list[str] = field(default_factory=list)
 
     def to_jira_payload(self, config: JiraConfig) -> dict[str, Any]:
@@ -410,6 +427,19 @@ class CreateEpicPayload:
         # Add Epic Name field if configured
         if config.epic_name_field:
             fields[config.epic_name_field] = self.summary
+
+        # Add reporter if provided
+        if self.reporter:
+            if config.use_frontend_reporter:
+                # Frontend reporter is typically the user's email or display name
+                fields["reporter"] = {"name": self.reporter}
+            elif config.api_version == 3:
+                # Cloud v3: Use accountId
+                fields["reporter"] = {"accountId": self.reporter}
+            else:
+                # Data Center v2: Use name (username) or key
+                # We prioritize 'name' as it's more common for lookups
+                fields["reporter"] = {"name": self.reporter}
 
         return {"fields": fields}
 
@@ -605,6 +635,64 @@ class JiraService:
             return Result.ok(issue)
 
         return Result.err(result.error)
+
+    async def get_user_by_email(self, email: str) -> Result[str]:
+        """
+        Find a Jira user by their email address.
+        Returns the Account ID (Cloud) or Username (Data Center).
+        """
+        if not email or "@" not in email:
+            return Result.err(JiraError(code=JiraErrorCode.VALIDATION_ERROR, message="Invalid email address"))
+
+        try:
+            if self.config.api_version == 3:
+                # Cloud v3
+                # Use /rest/api/3/user/search for finding users by email
+                params = {"query": email}
+                result = await self._request("GET", f"rest/api/{self.config.api_version}/user/search", params=params)
+
+                if result.is_ok and isinstance(result.value, list) and len(result.value) > 0:
+                    # Find exact match by email if possible, otherwise take first
+                    found_user = next(
+                        (u for u in result.value if u.get("emailAddress", "").lower() == email.lower()),
+                        result.value[0],
+                    )
+                    account_id = found_user.get("accountId")
+                    if account_id:
+                        logger.info(f"JiraService: Found user accountId '{account_id}' for email '{email}'")
+                        return Result.ok(account_id)
+
+                return Result.err(
+                    JiraError(code=JiraErrorCode.NOT_FOUND, message=f"User with email {email} not found in Jira Cloud")
+                )
+            else:
+                # Data Center v2
+                # Use /rest/api/2/user/search for finding users by email
+                params = {"query": email}
+                search_result = await self._request(
+                    "GET", f"rest/api/{self.config.api_version}/user/search", params=params
+                )
+
+                if search_result.is_ok and isinstance(search_result.value, list) and len(search_result.value) > 0:
+                    # Match by email specifically
+                    for user in search_result.value:
+                        if user.get("emailAddress", "").lower() == email.lower():
+                            username = user.get("name")
+                            if username:
+                                logger.info(f"JiraService: Found user username '{username}' for email '{email}'")
+                                return Result.ok(username)
+
+                return Result.err(
+                    JiraError(
+                        code=JiraErrorCode.NOT_FOUND, message=f"User with email {email} not found in Jira Data Center"
+                    )
+                )
+
+        except Exception as e:
+            logger.error(f"JiraService: Error looking up user {email}: {e}")
+            return Result.err(
+                JiraError(code=JiraErrorCode.UNKNOWN, message=f"Error looking up user: {e}", original_exception=e)
+            )
 
     async def create_issue(self, payload: CreateIssuePayload) -> Result[str]:
         """

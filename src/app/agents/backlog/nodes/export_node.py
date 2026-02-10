@@ -6,12 +6,15 @@ Creates issues with proper hierarchy (Epic → Stories).
 """
 
 import logging
+import uuid
 from typing import Any
 
 import httpx
+from sqlalchemy import select
 
 from ....core.config import settings
 from ....core.db.database import local_session
+from ....models.user import User
 from ...azure_openai import get_llm_service
 from ...vector_stores import VectorStoreFactory
 from ..config import BacklogAgentConfig
@@ -287,6 +290,11 @@ class ExportNode:
         created_issues = []
         errors = []
 
+        # Resolve reporter if configured
+        reporter_id = await self._resolve_jira_reporter(state.get("user_id"))
+        if reporter_id:
+            logger.info(f"ExportNode: Using Jira reporter '{reporter_id}' resolved from user_id {state.get('user_id')}")
+
         # Robust Parent Key Handling
         current_parent_epic_id = state.get("parent_epic_id")
         if current_parent_epic_id and "-" not in current_parent_epic_id:
@@ -295,7 +303,7 @@ class ExportNode:
 
         # 1. Handle Epic creation/update
         current_parent_epic_id = await self._export_epic(
-            result, project_key, current_parent_epic_id, created_issues, errors, base_url
+            result, project_key, current_parent_epic_id, created_issues, errors, base_url, reporter_id
         )
 
         # 2. Handle Story creation/update
@@ -307,6 +315,7 @@ class ExportNode:
             errors,
             base_url,
             state,
+            reporter_id,
         )
 
         status = "success" if not errors else "partial_success" if created_issues else "error"
@@ -329,6 +338,52 @@ class ExportNode:
             "stories": result.stories,
         }
 
+    async def _resolve_jira_reporter(self, user_id: str | None) -> str | None:
+        """
+        Resolve the Jira User identifier for the given local user.
+
+        This queries the local DB for the user's email, then uses the JiraService
+        to look up the corresponding Jira Account ID or Username.
+        """
+        if not self._jira_service or not self._jira_service.config.use_frontend_reporter:
+            return None
+
+        if not user_id or user_id == "anonymous":
+            return None
+
+        try:
+            # 1. Fetch user email from local DB
+            email = None
+            async with local_session() as db:
+                if user_id.isdigit():
+                    stmt = select(User.email).where(User.id == int(user_id))
+                else:
+                    try:
+                        uuid.UUID(user_id)
+                        stmt = select(User.email).where(User.uuid == user_id)
+                    except ValueError:
+                        logger.warning(f"ExportNode: Invalid user_id format: {user_id}")
+                        return None
+
+                result = await db.execute(stmt)
+                email = result.scalar_one_or_none()
+
+            if not email:
+                logger.warning(f"ExportNode: No email found for user_id {user_id}")
+                return None
+
+            # 2. Look up Jira account by email
+            jira_user_result = await self._jira_service.get_user_by_email(email)
+            if jira_user_result.is_ok:
+                return jira_user_result.value
+
+            logger.warning(f"ExportNode: Could not resolve Jira reporter for {email}: {jira_user_result.error}")
+            return None
+
+        except Exception as e:
+            logger.error(f"ExportNode: Error resolving Jira reporter: {e}")
+            return None
+
     async def _export_epic(
         self,
         result: DecompositionResult,
@@ -337,6 +392,7 @@ class ExportNode:
         created_issues: list,
         errors: list,
         base_url: str,
+        reporter_id: str | None = None,
     ) -> str | None:
         """Handle Epic creation or update."""
         from ....services.jira_service import CreateEpicPayload
@@ -369,6 +425,7 @@ class ExportNode:
                     summary=epic_data["summary"],
                     description=epic_data["description"],
                     labels=self._get_labels(result.epic),
+                    reporter=reporter_id,
                 )
                 epic_result = await self._jira_service.create_epic(payload)
 
@@ -407,6 +464,7 @@ class ExportNode:
         errors: list,
         base_url: str,
         state: BacklogAgentState,
+        reporter_id: str | None = None,
     ) -> None:
         """Handle multiple stories export."""
         for story in stories:
@@ -418,6 +476,7 @@ class ExportNode:
                 errors,
                 base_url,
                 state,
+                reporter_id,
             )
 
     async def _export_single_story(
@@ -429,6 +488,7 @@ class ExportNode:
         errors: list,
         base_url: str,
         state: BacklogAgentState,
+        reporter_id: str | None = None,
     ) -> None:
         """Handle single story export/update."""
         from ....services.jira_service import CreateIssuePayload
@@ -498,6 +558,7 @@ class ExportNode:
                 issue_type=target_type,
                 parent_key=parent_key,
                 labels=labels,
+                reporter=reporter_id,
             )
 
             create_result = await self._jira_service.create_issue(payload)
